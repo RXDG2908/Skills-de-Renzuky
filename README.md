@@ -4,7 +4,7 @@ Reusable skills collected for future design/frontend/content generations. Each w
 stripped to its skill payload (app source, websites, preview galleries, `.git` removed
 unless noted).
 
-**[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 2066 entries (skills +
+**[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 2113 entries (skills +
 design-systems + templates). Grep it by keyword, then open the `SKILL.md` / `DESIGN.md`
 at the path shown. Regenerate with `python .catalog/build_catalog.py`.
 Say **"usa skills"** in any project to have the right one picked and applied automatically.
@@ -32,6 +32,9 @@ skill was extracted, and using it for real may require that tool installed/runni
 | [`vertical-video-editing-skills/`](vertical-video-editing-skills/) | Skill | Script + talking-head/voiceover → creator-grade 9:16 vertical short via HyperFrames (nopefallacy) | 1 | 164K |
 | [`video-editor-plugin/`](video-editor-plugin/) | Skill | General video editing: trim/compress/merge/resize/captions/title cards/GIFs/watermarks (ElSalvatore-sys) | 1 | 267K |
 | [`remotion-ffmpeg-video-skill/`](remotion-ffmpeg-video-skill/) | Skill | Remotion + FFmpeg video skill (albertpikkop) | 1 | 61K |
+| [`ecc-affaan-skills/`](ecc-affaan-skills/) | Skill | 3 media skills pulled from affaan-m/ECC (the ~100MB "Everything Claude Code" monorepo, rest left out): `video-editing` (FFmpeg→Remotion→ElevenLabs→fal.ai→Descript/CapCut), `remotion-video-creation` (29 Remotion rules), `fal-ai-media` (image/video/audio via fal.ai MCP) | 3 | 198K |
+| [`jianshuo-claude-skills/`](jianshuo-claude-skills/) | Skill | 41 personal skills (Wang Jianshuo): video production (subtitles, dubbing, reframe, multicam, overlay, text→video, video-book), publishing (Hugo/WeChat/小红书/X/App Store/TestFlight), VoiceDrop (needs its MCP), article mining, style distillation — several Chinese and MCP/CLI-dependent | 41 | 17M |
+| [`master-skills/`](master-skills/) | Skill | 3 "master skills" (Jakeschincariol, MIT): `edit` (cut dead space, captions, stop-motion), `virality` (LinkedIn+YouTube agents fused), `build` (best design+code skills merged into apps/sites) | 3 | 487K |
 | [`claude-code-video-toolkit/`](claude-code-video-toolkit/) | Not skills | Curated README pointing to video-production tools/skills (wilwaldon) — reference only, links out | — | 12K |
 | [`img2game2d/`](img2game2d/) | Skill | Concept art → game-ready 2D assets: sprite sheets, skeletal rigs, atlases, lighting maps, engine exports (Godot/Unity/Spine/Phaser/PixiJS) (MrFaraidun) | 1 | 136K |
 | [`spine-animation-ai/`](spine-animation-ai/) | Skill | AI-driven Spine 2D skeletal animation (GenielabsOpenSource) | 1 | 180K |
@@ -66,12 +69,20 @@ skill was extracted, and using it for real may require that tool installed/runni
 | [`html-ppt-skill/`](html-ppt-skill/) | Skill | HTML PPT Studio: 36 themes, decks, layouts, animations (lewislulu) — keeps `.git` | 1 | 21M |
 | [`huashu-design/`](huashu-design/) | Skill | 花叔Design: HTML prototypes, slides, GSAP animation, MP4/GIF export, review | 1 | 32M |
 | [`awesome-claude-design/`](awesome-claude-design/) | Not skills | Curated index of `DESIGN.md` files (VoltAgent) — `README.md` only, links out | — | 24K |
+| [`behisecc-awesome-claude-skills/`](behisecc-awesome-claude-skills/) | Not skills | Curated awesome-list of Claude Skills by category (BehiSecc) — `README.md` only, links out to external repos; nothing invocable here | — | 264K |
 | [`claude-quickstarts/`](claude-quickstarts/) | Not skills | Anthropic example apps — reference only (see `NOTE.md`) | — | 8.5M |
 
 ## Skill vs Tool+Skill vs Not skills
 
 - **Not brought in at all** (fully app, zero SKILL.md found): `webadderallorg/Recordly`
   (screen recorder). See `Not brought in` note below the table in `use-skills/SKILL.md`.
+- **Batch 2026-10-19 — omitted on purpose**: `remotion-dev/remotion`, `FFmpeg/FFmpeg` and
+  `openai/whisper` are upstream tools/libraries (React video framework, media transcoder,
+  ASR model), not skills — the video skills above call them as dependencies, so they
+  weren't imported as folders. Already present, so skipped as duplicates:
+  `haidrrrry/claude-remotion-skill` (→ `claude-remotion-skill/`),
+  `nopefallacy/vertical-video-editing-skills` (→ `vertical-video-editing-skills/`),
+  `ComposioHQ/awesome-claude-skills` (→ `awesome-claude-skills/`).
 - **Tool+Skill** folders (`archify`, `Agent-Reach`, `VoiceStudio`, and `composio-skills/`
   inside `awesome-claude-skills`) only work fully if the underlying tool/CLI/MCP server
   is actually present — the skill alone won't reproduce the app's behavior, it's a

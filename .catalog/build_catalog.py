@@ -464,6 +464,36 @@ for p in [f"{BASE}/html-ppt-skill/SKILL.md", f"{BASE}/huashu-design/SKILL.md", f
                       clean(fm.get("description",""), 300), os.path.dirname(p)))
 total += len(rows); out.append("\n".join(rows) + "\n")
 
+# 39. ecc-affaan-skills (3 media skills from affaan-m/ECC) [batch 2026-10-19]
+section("ecc-affaan-skills (3)",
+        "De affaan-m/ECC (monorepo 'Everything Claude Code', ~100MB con cientos de skills de ingeniería; solo se trajeron sus 3 skills de medios): video-editing (pipeline FFmpeg→Remotion→ElevenLabs→fal.ai→Descript/CapCut), remotion-video-creation (29 reglas Remotion React→vídeo), fal-ai-media (gen. imagen/vídeo/audio vía fal.ai MCP). Las dos últimas requieren Remotion/fal.ai.")
+rows = []
+for f in sorted(glob.glob(f"{BASE}/ecc-affaan-skills/skills/*/SKILL.md")):
+    fm = frontmatter(read(f))
+    name = os.path.basename(os.path.dirname(f))
+    rows.append(entry(name, clean(fm.get("description",""), 260), os.path.dirname(f)))
+total += len(rows); out.append("\n".join(rows) + "\n")
+
+# 40. jianshuo-claude-skills (41) [batch 2026-10-19]
+section("jianshuo-claude-skills (41)",
+        "Skills personales de Wang Jianshuo/王建硕 (jianshuo): producción de vídeo (subtítulos, dubbing, reframe, multicam, overlay, segmentación, texto→vídeo, video-book, localización), publicación (Hugo, WeChat, 小红书, X/Twitter, App Store, TestFlight), VoiceDrop (requiere su MCP voicedrop.cn), minería/reescritura de artículos, destilado de estilo, enseñar inglés. Varias en chino y dependientes de MCP/CLI externos.")
+rows = []
+for f in sorted(glob.glob(f"{BASE}/jianshuo-claude-skills/*/SKILL.md")):
+    fm = frontmatter(read(f))
+    name = os.path.basename(os.path.dirname(f))
+    rows.append(entry(name, clean(fm.get("description",""), 200), os.path.dirname(f)))
+total += len(rows); out.append("\n".join(rows) + "\n")
+
+# 41. master-skills (3) [batch 2026-10-19]
+section("master-skills (3)",
+        "Tres 'master skills' (Jakeschincariol, MIT): edit (corta dead space, captions, visuales dinámicos, stop-motion), virality (fusiona agentes LinkedIn+YouTube: encuentra lo que funciona y lo reescribe en tu voz), build (fusiona las mejores skills de diseño+código para apps/webs que funcionan).")
+rows = []
+for f in sorted(glob.glob(f"{BASE}/master-skills/skills/*/SKILL.md")):
+    fm = frontmatter(read(f))
+    name = os.path.basename(os.path.dirname(f))
+    rows.append(entry(name, clean(fm.get("description",""), 300), os.path.dirname(f)))
+total += len(rows); out.append("\n".join(rows) + "\n")
+
 out.insert(3, f"\n**Total: {total} entradas.**\n")
 
 io.open(f"{BASE}/CATALOG.md", "w", encoding="utf-8").write("\n".join(out))
