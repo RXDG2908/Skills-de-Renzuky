@@ -4,9 +4,15 @@ Reusable skills collected for future design/frontend/content generations. Each w
 stripped to its skill payload (app source, websites, preview galleries, `.git` removed
 unless noted).
 
-**[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 2113 entries (skills +
-design-systems + templates). Grep it by keyword, then open the `SKILL.md` / `DESIGN.md`
-at the path shown. Regenerate with `python .catalog/build_catalog.py`.
+Two ways to find a skill:
+
+- **[`TEMAS.md`](TEMAS.md)** — topic map by *purpose* (code, web, design, video, audio,
+  animation, 2D characters, image, content/social, ads, docs, automation, reference).
+  Start here when you know *what you want to do*.
+- **[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 2113 entries (skills +
+  design-systems + templates). Grep it by keyword, then open the `SKILL.md` / `DESIGN.md`
+  at the path shown. Regenerate with `python .catalog/build_catalog.py`.
+
 Say **"usa skills"** in any project to have the right one picked and applied automatically.
 
 **Type** column: **Skill** = the folder is only agent-skill payload. **Tool+Skill** = the
