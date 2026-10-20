@@ -5,7 +5,7 @@
 Generado por `scratchpad/build_catalog.py`. Regenerar al añadir repos.
 
 
-**Total: 2113 entradas.**
+**Total: 2114 entradas.**
 
 
 ## open-design-skills / skills (162)
@@ -2351,3 +2351,10 @@ _Tres 'master skills' (Jakeschincariol, MIT): edit (corta dead space, captions, 
 - **build** — Takes someone with no technical skill from "I want a website or app that does X" to a live, working, great-looking product. Merges the best design skills (impeccable, Anthropic's frontend-design) with the best engineering discipline (gstack, superpowers). Covers a one-page plain-English spec, the s…  · `master-skills/skills/build`
 - **edit** — Edit talking-head and short-form video end to end: cut dead space, ums and retakes, add word-timed captions, dynamic visuals and stop motion, then finish the audio at -14 LUFS and export for Reels, TikTok and Shorts. Combines the HyperFrames, Remotion and video-use editing skills with local ffmpeg…  · `master-skills/skills/edit`
 - **virality** — Find what is already working in a niche, then rewrite it in the user's own voice for their audience and hand back a shoot-ready short-form video script (Reels, TikTok, Shorts), with a LinkedIn post or long-form version as a secondary output. Ranks posts by how far each beat its creator's own median…  · `master-skills/skills/virality`
+
+
+## face-analysis-skill (1) [AUTORADA]
+
+_Skill autorada de detección y análisis facial: guía de pipeline (detección → alineación/landmarks → segmentación/parsing → preprocesado → inferencia local/aceleración) y qué librería usar cuándo (InsightFace, RetinaFace, MediaPipe, OpenCV, YOLO, DeepFace, face_recognition, dlib, face-alignment, SAM2, face-parsing, Pillow, scikit-image, Albumentations, ONNX Runtime, PyTorch, OpenVINO, TensorRT). Las librerías NO se clonan; la skill dice cuál instalar y cómo combinarlas. Incluye notas de licencia (p.ej. YOLO AGPL, modelos InsightFace research-only) y privacidad._
+
+- **face-detection-analysis** — Pipeline guide for face detection and analysis in Python — pick the right library for each stage (detection, alignment/landmarks, parsing/segmentation, image preprocessing, local/accelerated inference) and wire them together. Covers InsightFace, RetinaFace, MediaPipe, OpenCV, Ultralytics YOLO, Deep…  · `face-analysis-skill`

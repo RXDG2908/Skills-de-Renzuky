@@ -494,6 +494,14 @@ for f in sorted(glob.glob(f"{BASE}/master-skills/skills/*/SKILL.md")):
     rows.append(entry(name, clean(fm.get("description",""), 300), os.path.dirname(f)))
 total += len(rows); out.append("\n".join(rows) + "\n")
 
+# 42. face-analysis-skill (authored) [batch 2026-10-19]
+section("face-analysis-skill (1) [AUTORADA]",
+        "Skill autorada de detección y análisis facial: guía de pipeline (detección → alineación/landmarks → segmentación/parsing → preprocesado → inferencia local/aceleración) y qué librería usar cuándo (InsightFace, RetinaFace, MediaPipe, OpenCV, YOLO, DeepFace, face_recognition, dlib, face-alignment, SAM2, face-parsing, Pillow, scikit-image, Albumentations, ONNX Runtime, PyTorch, OpenVINO, TensorRT). Las librerías NO se clonan; la skill dice cuál instalar y cómo combinarlas. Incluye notas de licencia (p.ej. YOLO AGPL, modelos InsightFace research-only) y privacidad.")
+rows = []
+fm = frontmatter(read(f"{BASE}/face-analysis-skill/SKILL.md"))
+rows.append(entry(fm.get("name","face-detection-analysis"), clean(fm.get("description",""), 300), f"{BASE}/face-analysis-skill"))
+total += len(rows); out.append("\n".join(rows) + "\n")
+
 out.insert(3, f"\n**Total: {total} entradas.**\n")
 
 io.open(f"{BASE}/CATALOG.md", "w", encoding="utf-8").write("\n".join(out))

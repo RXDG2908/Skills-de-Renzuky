@@ -4,7 +4,7 @@ Dos formas de buscar una skill:
 
 1. **Este archivo (`TEMAS.md`)** — mapa por *propósito*: ¿qué quieres hacer? (code, web,
    diseño, vídeo, audio, animación, contenido…). Te lleva a la carpeta/skill correcta.
-2. **[`CATALOG.md`](CATALOG.md)** — índice plano de las 2113 entradas. Haz Ctrl-F por
+2. **[`CATALOG.md`](CATALOG.md)** — índice plano de las 2114 entradas. Haz Ctrl-F por
    palabra clave y abre el `SKILL.md`/`DESIGN.md` de la ruta indicada.
 
 Y en cualquier proyecto, di **"usa skills"** para que se elija y aplique la mejor
@@ -149,6 +149,15 @@ Generación y manipulación de imagen, PSD por capas.
 | [`ecc-affaan-skills/skills/fal-ai-media`](ecc-affaan-skills/skills/fal-ai-media) | Skill | Text-to-image (Nano Banana), image→video (Seedance/Kling/Veo 3) vía fal.ai | — |
 
 También en **awesome-claude-skills**: mejora de imagen, canvas art, generación de temas.
+
+---
+
+## 👤 Visión facial (detección & análisis)
+Detección de caras, landmarks, parsing/segmentación, atributos, reconocimiento e inferencia.
+
+| Carpeta | Tipo | Qué | Nº |
+|---|---|---|---|
+| [`face-analysis-skill/`](face-analysis-skill/) | Skill (autorada) | Guía de pipeline (detección → landmarks → parsing/segmentación → preprocesado → inferencia) y qué librería usar cuándo: InsightFace, MediaPipe, RetinaFace, OpenCV, YOLO, DeepFace, dlib, face-alignment, SAM2, ONNX Runtime, OpenVINO, TensorRT… Incluye notas de licencia y privacidad. Las librerías no se clonan: dice cuál instalar y cómo combinarlas | 1 |
 
 ---
 

@@ -9,7 +9,7 @@ Two ways to find a skill:
 - **[`TEMAS.md`](TEMAS.md)** — topic map by *purpose* (code, web, design, video, audio,
   animation, 2D characters, image, content/social, ads, docs, automation, reference).
   Start here when you know *what you want to do*.
-- **[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 2113 entries (skills +
+- **[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 2114 entries (skills +
   design-systems + templates). Grep it by keyword, then open the `SKILL.md` / `DESIGN.md`
   at the path shown. Regenerate with `python .catalog/build_catalog.py`.
 
@@ -54,6 +54,7 @@ skill was extracted, and using it for real may require that tool installed/runni
 | [`character-animation-skill/`](character-animation-skill/) | Skill | Character animation skill (karem505) | 1 | 140K |
 | [`agent-skills-addyosmani/`](agent-skills-addyosmani/) | Skill | 25 end-to-end engineering-practice skills: TDD, spec-driven, debugging, security, perf, CI/CD, git workflow, shipping (Addy Osmani/Google) | 25 | 573K |
 | [`security-audit-skill/`](security-audit-skill/) | Skill | Multi-phase security audit with independently-verified findings (Cloudflare, official) | 1 | 368K |
+| [`face-analysis-skill/`](face-analysis-skill/) | Skill (authored) | Face detection & analysis pipeline guide: which library per stage (detection/landmarks/parsing/preprocess/inference) — InsightFace, MediaPipe, OpenCV, YOLO, DeepFace, dlib, face-alignment, SAM2, ONNX Runtime, OpenVINO, TensorRT — with install, license & privacy cautions. Libraries not vendored | 1 | 28K |
 | [`archify/`](archify/) | Tool+Skill | Full diagram-tool repo (~313MB: website, viewer, benchmarks) — only its 2 skills kept: `archify` (architecture/flow/sequence diagrams as HTML) + `archify-review` (repo-maintainer only) (tt-a1i) | 2 | 8.6M |
 | [`Agent-Reach/`](Agent-Reach/) | Tool+Skill | CLI that reads/searches Twitter/Reddit/YouTube/GitHub/Bilibili/XHS, no API keys — only the skill wrapper kept, **needs the `agent-reach` CLI installed** (Panniantong) | 1 | 104K |
 | [`VoiceStudio/`](VoiceStudio/) | Tool+Skill | Local ElevenLabs-alternative voice app (Electron+backend+frontend) — only `skills/` kept, **needs VoiceStudio installed and running** (debpalash) | 2 | 64K |
