@@ -1,6 +1,6 @@
 ---
 name: face-detection-analysis
-description: Pipeline guide for face detection and analysis in Python — pick the right library for each stage (detection, alignment/landmarks, parsing/segmentation, image preprocessing, local/accelerated inference) and wire them together. Covers InsightFace, RetinaFace, MediaPipe, OpenCV, Ultralytics YOLO, DeepFace, face_recognition, dlib, face-alignment, SAM2, face-parsing, Pillow, scikit-image, Albumentations, ONNX Runtime, PyTorch, OpenVINO, TensorRT. Use when the user wants to detect faces, extract facial landmarks/keypoints, parse/segment facial regions, analyze face attributes (age/gender/emotion), run face recognition, or deploy any of this on CPU/GPU/edge. The libraries are NOT vendored here — this skill tells you which to install and how to combine them.
+description: Pipeline guide for face detection and analysis in Python — pick the right library for each stage (detection, alignment/landmarks, parsing/segmentation, image preprocessing, local/accelerated inference) and wire them together, plus a full blueprint for building a professional local face detect/align/crop module (configurable crop styles, adaptive margins, aspect-ratio preservation, transparent backgrounds, batch, QA, tests/metrics). Covers InsightFace, RetinaFace, MediaPipe, OpenCV, Ultralytics YOLO, DeepFace, face_recognition, dlib, face-alignment, SAM2, face-parsing, Pillow, scikit-image, Albumentations, ONNX Runtime, PyTorch, OpenVINO, TensorRT. Use when the user wants to detect faces, extract facial landmarks/keypoints, parse/segment facial regions, align and crop faces (headshot / full face with hair & ears / head & shoulders), analyze face attributes, run face recognition, or deploy any of this locally on CPU/GPU/edge (incl. modest GPUs like an RTX 2060 6GB on Windows). The libraries are NOT vendored here — this skill tells you which to install and how to combine them.
 metadata:
   type: authored
   origin: D:/Skills (authored 2026-10-19)
@@ -39,6 +39,19 @@ recognition / verification / embeddings**, face **preprocessing / augmentation**
 
 Most tasks need only stages 1–2. Add 3 for masks/editing/beautify, and 4+5 when latency,
 batch size, or edge/mobile matter.
+
+## Building a face detect/align/crop module? → read the blueprint first
+
+If the goal is a real **tool** (detect → pick primary face → align → segment → crop with
+configurable styles, adaptive margins, aspect-ratio preservation, transparent bg, batch, QA,
+tests & metrics), follow **[`references/crop-module-blueprint.md`](references/crop-module-blueprint.md)**.
+It has the module layout, crop strategies (headshot / full-face-with-hair-&-ears / head-&-shoulders),
+margin/alignment math, validation rules, pinned dependencies, run commands, and a recommended
+lightweight stack for **Windows + RTX 2060 6 GB** (InsightFace `buffalo_s` + face-parsing ONNX via
+ONNX Runtime CUDA, with CPU fallback). Core rules from it: never deform the face, never crop from a
+fixed rectangle alone, preserve aspect ratio, handle borders/padding explicitly, and never claim
+precision you haven't measured. Always inspect an existing project and match its architecture before
+writing, and don't overwrite files without reading them.
 
 ## Decision guide — which library, by goal
 
@@ -118,6 +131,7 @@ Always confirm the current license on each repo — terms change.
 - [`references/segmentation.md`](references/segmentation.md) — face-parsing (BiSeNet), uniface, SAM2
 - [`references/image-processing.md`](references/image-processing.md) — Pillow, scikit-image, Albumentations
 - [`references/inference.md`](references/inference.md) — ONNX Runtime, PyTorch, OpenVINO, TensorRT
+- [`references/crop-module-blueprint.md`](references/crop-module-blueprint.md) — full build blueprint: modules, crop strategies, margins/alignment, validation/QA, pinned deps, tests & metrics, RTX 2060 6 GB stack
 
 ## Official docs
 
