@@ -5,7 +5,7 @@
 Generado por `scratchpad/build_catalog.py`. Regenerar al añadir repos.
 
 
-**Total: 2114 entradas.**
+**Total: 2127 entradas.**
 
 
 ## open-design-skills / skills (162)
@@ -2358,3 +2358,22 @@ _Tres 'master skills' (Jakeschincariol, MIT): edit (corta dead space, captions, 
 _Skill autorada de detección y análisis facial: guía de pipeline (detección → alineación/landmarks → segmentación/parsing → preprocesado → inferencia local/aceleración) y qué librería usar cuándo (InsightFace, RetinaFace, MediaPipe, OpenCV, YOLO, DeepFace, face_recognition, dlib, face-alignment, SAM2, face-parsing, Pillow, scikit-image, Albumentations, ONNX Runtime, PyTorch, OpenVINO, TensorRT). Las librerías NO se clonan; la skill dice cuál instalar y cómo combinarlas. Incluye notas de licencia (p.ej. YOLO AGPL, modelos InsightFace research-only) y privacidad._
 
 - **face-detection-analysis** — Pipeline guide for face detection and analysis in Python — pick the right library for each stage (detection, alignment/landmarks, parsing/segmentation, image preprocessing, local/accelerated inference) and wire them together, plus a full blueprint for building a professional local face detect/align…  · `face-analysis-skill`
+
+
+## Papercraft, troquelado & fabricación (9 skills + 4 tools)
+
+_Batch 2026-10-26. Skills: openscad-skills (joaorura, MIT; escritas para Gemini CLI, valen igual) y cadquery-skills (gAmUssA, MIT; plugin de Claude Code) para CAD paramétrico → proyección 2D SVG/DXF con tolerancias. Tools (sin SKILL.md, se usan directamente): Export-Paper-Model-from-Blender (add-on, despliega mallas con pestañas/pliegues → SVG/PDF; manejable vía Blender MCP), boxes (Boxes.py CLI, cajas de corte láser con finger joints/kerf), packbox y packaging-dieline-generator (dielines de empaques → SVG/PDF)._
+
+- **openscad-boardgame-organizer** — Use when creating board game inserts or organizers using The Boardgame Insert Toolkit (BIT).  _[openscad-skills]_  · `openscad-skills/openscad-boardgame-organizer`
+- **openscad-bosl2-mastery** — Use when Gemini CLI is implementing geometry using the BOSL2 library.  _[openscad-skills]_  · `openscad-skills/openscad-bosl2-mastery`
+- **openscad-project-understanding** — Use when Gemini CLI needs to structure, organize, or manage a complex OpenSCAD project.  _[openscad-skills]_  · `openscad-skills/openscad-project-understanding`
+- **openscad-workflow-planning** — Use when planning a new OpenSCAD model or refactoring an existing one for better parametric control.  _[openscad-skills]_  · `openscad-skills/openscad-workflow-planning`
+- **assembly-constraints** — Create and manage CadQuery assemblies with parts, sub-assemblies, and constraint-based positioning.  _[cadquery-skills]_  · `cadquery-skills/skills/assembly-constraints`
+- **cad-code-generation** — Create or edit runnable parametric CadQuery Python models for parts and assemblies, including manufacturable details and existing-feature preservation.  _[cadquery-skills]_  · `cadquery-skills/skills/cad-code-generation`
+- **cad-planner** — You are the Chief Engineer. You design machines by recursively subdividing them into assemblies and parts according to the filesystem architecture.  _[cadquery-skills]_  · `cadquery-skills/skills/cad-planner`
+- **cadquery-export** — Export CadQuery models to STL/STEP/AMF/3MF and other formats for manufacturing, 3D printing, and visualization.  _[cadquery-skills]_  · `cadquery-skills/skills/cadquery-export`
+- **design-versioning** — Track CAD design iterations with Git - commit changes, compare versions, maintain history like code.  _[cadquery-skills]_  · `cadquery-skills/skills/design-versioning`
+- **export-paper-model** — Add-on de Blender (Addam Dominec, GPL-3.0+): papercraft — despliega la malla activa en una red imprimible con pestañas de pegado, numeración de bordes, pliegues valle/montaña, nesting en hojas; exporta SVG/PDF. Requiere Blender ≥5.0; se instala como extensión y se maneja vía Blender MCP.  _[tool]_  · `Export-Paper-Model-from-Blender`
+- **boxes.py** — Boxes.py (florianfesti, GPL-3.0): 100+ generadores paramétricos de cajas/estructuras para corte láser — finger joints, ranura-lengüeta, living hinges, compensación de kerf; CLI/web → SVG. Requiere Python + instalar el paquete.  _[tool]_  · `boxes`
+- **packbox-studio** — PackBox Studio (sbarrak, MIT): app local de empaques — dieline paramétrica, editor de arte, preview 3D del plegado. Electron/Vite, requiere Node.  _[tool]_  · `packbox`
+- **packaging-dieline-generator** — Generador offline de dielines de cajas (NealZhouPanda, MIT): medidas + grosor de cartón → SVG 1:1 mm o PDF. Un solo HTML (release/), sin instalar.  _[tool]_  · `packaging-dieline-generator`

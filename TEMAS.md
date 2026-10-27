@@ -4,15 +4,16 @@ Dos formas de buscar una skill:
 
 1. **Este archivo (`TEMAS.md`)** — mapa por *propósito*: ¿qué quieres hacer? (code, web,
    diseño, vídeo, audio, animación, contenido…). Te lleva a la carpeta/skill correcta.
-2. **[`CATALOG.md`](CATALOG.md)** — índice plano de las 2114 entradas. Haz Ctrl-F por
+2. **[`CATALOG.md`](CATALOG.md)** — índice plano de las 2127 entradas. Haz Ctrl-F por
    palabra clave y abre el `SKILL.md`/`DESIGN.md` de la ruta indicada.
 
 Y en cualquier proyecto, di **"usa skills"** para que se elija y aplique la mejor
 automáticamente (dispatcher en [`use-skills`](use-skills/)).
 
 **Leyenda de tipo** — **Skill**: payload de skill listo para usar. **Tool+Skill**:
-necesita un CLI/app/MCP externo instalado o corriendo. **Ref**: solo referencia, nada
-invocable.
+necesita un CLI/app/MCP externo instalado o corriendo. **Tool**: la herramienta upstream
+tal cual, sin `SKILL.md` — se usa directamente (CLI, add-on, app). **Ref**: solo
+referencia, nada invocable.
 
 ---
 
@@ -158,6 +159,23 @@ Detección de caras, landmarks, parsing/segmentación, atributos, reconocimiento
 | Carpeta | Tipo | Qué | Nº |
 |---|---|---|---|
 | [`face-analysis-skill/`](face-analysis-skill/) | Skill (autorada) | Guía de pipeline (detección → landmarks → parsing/segmentación → preprocesado → inferencia) y qué librería usar cuándo: InsightFace, MediaPipe, RetinaFace, OpenCV, YOLO, DeepFace, dlib, face-alignment, SAM2, ONNX Runtime, OpenVINO, TensorRT… Incluye notas de licencia y privacidad. Las librerías no se clonan: dice cuál instalar y cómo combinarlas | 1 |
+
+---
+
+## ✂️ Papercraft, troquelado & fabricación
+Figuras armables, plantillas de corte, encajes simétricos, dielines de empaques, CAD paramétrico.
+
+| Carpeta | Tipo | Qué | Nº |
+|---|---|---|---|
+| [`Export-Paper-Model-from-Blender/`](Export-Paper-Model-from-Blender/) | Tool | Add-on de Blender: despliega un modelo 3D en piezas planas con pestañas de pegado, numeración de bordes y pliegues valle/montaña → SVG/PDF. Requiere Blender ≥5.0; manejable vía Blender MCP | — |
+| [`boxes/`](boxes/) | Tool | Boxes.py: 100+ generadores de cajas para corte láser con finger joints, ranura-lengüeta, living hinges y compensación de kerf → SVG (CLI Python) | — |
+| [`openscad-skills/`](openscad-skills/) | Skill | OpenSCAD + BOSL2: planificar modelos paramétricos, organizers de juegos de mesa; `projection()` → SVG/DXF para cortar | 4 |
+| [`cadquery-skills/`](cadquery-skills/) | Skill | CadQuery: planificar, generar código, ensamblajes con restricciones, exportar (STL/STEP/SVG/DXF), versionar diseños | 5 |
+| [`packbox/`](packbox/) | Tool | PackBox Studio: dielines de empaques + editor de arte + preview 3D del plegado (Electron, requiere Node) | — |
+| [`packaging-dieline-generator/`](packaging-dieline-generator/) | Tool | Dielines de cajas a partir de medidas y grosor de cartón → SVG 1:1 mm / PDF; un solo HTML en `release/` | — |
+
+Para papercraft de figuras: modelo en Blender (o `open-design-skills/skills/fal-3d`) →
+`Export-Paper-Model` → PDF con las skills de pdf. Para encajes exactos: `boxes/` u OpenSCAD.
 
 ---
 

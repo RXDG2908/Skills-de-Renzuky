@@ -502,6 +502,24 @@ fm = frontmatter(read(f"{BASE}/face-analysis-skill/SKILL.md"))
 rows.append(entry(fm.get("name","face-detection-analysis"), clean(fm.get("description",""), 300), f"{BASE}/face-analysis-skill"))
 total += len(rows); out.append("\n".join(rows) + "\n")
 
+# 43. papercraft / troquelado / fabricación [batch 2026-10-26]
+section("Papercraft, troquelado & fabricación (9 skills + 4 tools)",
+        "Batch 2026-10-26. Skills: openscad-skills (joaorura, MIT; escritas para Gemini CLI, valen igual) y cadquery-skills (gAmUssA, MIT; plugin de Claude Code) para CAD paramétrico → proyección 2D SVG/DXF con tolerancias. Tools (sin SKILL.md, se usan directamente): Export-Paper-Model-from-Blender (add-on, despliega mallas con pestañas/pliegues → SVG/PDF; manejable vía Blender MCP), boxes (Boxes.py CLI, cajas de corte láser con finger joints/kerf), packbox y packaging-dieline-generator (dielines de empaques → SVG/PDF).")
+rows = []
+for f in sorted(glob.glob(f"{BASE}/openscad-skills/*/SKILL.md")) + sorted(glob.glob(f"{BASE}/cadquery-skills/skills/*/SKILL.md")):
+    fm = frontmatter(read(f))
+    name = fm.get("name", os.path.basename(os.path.dirname(f)))
+    grp = f.replace("\\", "/").replace(BASE + "/", "").split("/")[0]
+    rows.append(entry(name, clean(fm.get("description",""), 220), os.path.dirname(f), grp))
+for name, desc, folder in [
+    ("export-paper-model", "Add-on de Blender (Addam Dominec, GPL-3.0+): papercraft — despliega la malla activa en una red imprimible con pestañas de pegado, numeración de bordes, pliegues valle/montaña, nesting en hojas; exporta SVG/PDF. Requiere Blender ≥5.0; se instala como extensión y se maneja vía Blender MCP.", "Export-Paper-Model-from-Blender"),
+    ("boxes.py", "Boxes.py (florianfesti, GPL-3.0): 100+ generadores paramétricos de cajas/estructuras para corte láser — finger joints, ranura-lengüeta, living hinges, compensación de kerf; CLI/web → SVG. Requiere Python + instalar el paquete.", "boxes"),
+    ("packbox-studio", "PackBox Studio (sbarrak, MIT): app local de empaques — dieline paramétrica, editor de arte, preview 3D del plegado. Electron/Vite, requiere Node.", "packbox"),
+    ("packaging-dieline-generator", "Generador offline de dielines de cajas (NealZhouPanda, MIT): medidas + grosor de cartón → SVG 1:1 mm o PDF. Un solo HTML (release/), sin instalar.", "packaging-dieline-generator"),
+]:
+    rows.append(entry(name, desc, f"{BASE}/{folder}", "tool"))
+total += len(rows); out.append("\n".join(rows) + "\n")
+
 out.insert(3, f"\n**Total: {total} entradas.**\n")
 
 io.open(f"{BASE}/CATALOG.md", "w", encoding="utf-8").write("\n".join(out))

@@ -9,7 +9,7 @@ Two ways to find a skill:
 - **[`TEMAS.md`](TEMAS.md)** — topic map by *purpose* (code, web, design, video, audio,
   animation, 2D characters, image, content/social, ads, docs, automation, reference).
   Start here when you know *what you want to do*.
-- **[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 2114 entries (skills +
+- **[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 2127 entries (skills +
   design-systems + templates). Grep it by keyword, then open the `SKILL.md` / `DESIGN.md`
   at the path shown. Regenerate with `python .catalog/build_catalog.py`.
 
@@ -18,6 +18,7 @@ Say **"usa skills"** in any project to have the right one picked and applied aut
 **Type** column: **Skill** = the folder is only agent-skill payload. **Tool+Skill** = the
 upstream repo is primarily a standalone application/CLI/product; only a thin companion
 skill was extracted, and using it for real may require that tool installed/running/MCP-connected.
+**Tool** = the upstream tool vendored as-is with no `SKILL.md`; use it directly (CLI, add-on, app).
 **Not skills** = kept for reference only, nothing here is invocable as a skill.
 
 | Folder | Type | What | Count | Size |
@@ -55,6 +56,12 @@ skill was extracted, and using it for real may require that tool installed/runni
 | [`agent-skills-addyosmani/`](agent-skills-addyosmani/) | Skill | 25 end-to-end engineering-practice skills: TDD, spec-driven, debugging, security, perf, CI/CD, git workflow, shipping (Addy Osmani/Google) | 25 | 573K |
 | [`security-audit-skill/`](security-audit-skill/) | Skill | Multi-phase security audit with independently-verified findings (Cloudflare, official) | 1 | 368K |
 | [`face-analysis-skill/`](face-analysis-skill/) | Skill (authored) | Face detection & analysis pipeline guide: which library per stage (detection/landmarks/parsing/preprocess/inference) — InsightFace, MediaPipe, OpenCV, YOLO, DeepFace, dlib, face-alignment, SAM2, ONNX Runtime, OpenVINO, TensorRT — with install, license & privacy cautions. Libraries not vendored | 1 | 28K |
+| [`Export-Paper-Model-from-Blender/`](Export-Paper-Model-from-Blender/) | Tool | Blender add-on: unfolds a mesh into a printable papercraft net with glue tabs, edge numbers, valley/mountain folds, sheet nesting → SVG/PDF; needs Blender ≥5.0, drivable via Blender MCP (addam, GPL-3.0+ per `blender_manifest.toml`, no LICENSE file) | — | 165K |
+| [`boxes/`](boxes/) | Tool | Boxes.py: 100+ parametric laser-cut box/structure generators — finger joints, tab-slot, living hinges, kerf compensation; Python CLI/web → SVG (florianfesti, GPL-3.0) — shallow clone | — | 58M |
+| [`openscad-skills/`](openscad-skills/) | Skill | OpenSCAD agent skills: BOSL2 geometry, workflow planning, project structure, board-game organizers (written for Gemini CLI, work the same) (joaorura, MIT) | 4 | 55K |
+| [`cadquery-skills/`](cadquery-skills/) | Skill | CadQuery Claude Code plugin: planner, code generation, assembly constraints, export, design versioning (gAmUssA, MIT) — needs CadQuery installed | 5 | 124K |
+| [`packbox/`](packbox/) | Tool | PackBox Studio: local packaging app — parametric dielines, artwork editor, 3D fold preview; Electron/Vite, needs Node (sbarrak, MIT) | — | 4.4M |
+| [`packaging-dieline-generator/`](packaging-dieline-generator/) | Tool | Offline box dieline generator: dimensions + board thickness → 1:1 mm SVG or PDF; single HTML in `release/` (NealZhouPanda, MIT) | — | 43M |
 | [`archify/`](archify/) | Tool+Skill | Full diagram-tool repo (~313MB: website, viewer, benchmarks) — only its 2 skills kept: `archify` (architecture/flow/sequence diagrams as HTML) + `archify-review` (repo-maintainer only) (tt-a1i) | 2 | 8.6M |
 | [`Agent-Reach/`](Agent-Reach/) | Tool+Skill | CLI that reads/searches Twitter/Reddit/YouTube/GitHub/Bilibili/XHS, no API keys — only the skill wrapper kept, **needs the `agent-reach` CLI installed** (Panniantong) | 1 | 104K |
 | [`VoiceStudio/`](VoiceStudio/) | Tool+Skill | Local ElevenLabs-alternative voice app (Electron+backend+frontend) — only `skills/` kept, **needs VoiceStudio installed and running** (debpalash) | 2 | 64K |
