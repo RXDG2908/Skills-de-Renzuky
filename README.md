@@ -9,7 +9,7 @@ Two ways to find a skill:
 - **[`TEMAS.md`](TEMAS.md)** — topic map by *purpose* (code, web, design, video, audio,
   animation, 2D characters, image, content/social, ads, docs, automation, reference).
   Start here when you know *what you want to do*.
-- **[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 2127 entries (skills +
+- **[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 2297 entries (skills +
   design-systems + templates). Grep it by keyword, then open the `SKILL.md` / `DESIGN.md`
   at the path shown. Regenerate with `python .catalog/build_catalog.py`.
 
@@ -62,6 +62,10 @@ skill was extracted, and using it for real may require that tool installed/runni
 | [`cadquery-skills/`](cadquery-skills/) | Skill | CadQuery Claude Code plugin: planner, code generation, assembly constraints, export, design versioning (gAmUssA, MIT) — needs CadQuery installed | 5 | 124K |
 | [`packbox/`](packbox/) | Tool | PackBox Studio: local packaging app — parametric dielines, artwork editor, 3D fold preview; Electron/Vite, needs Node (sbarrak, MIT) | — | 4.4M |
 | [`packaging-dieline-generator/`](packaging-dieline-generator/) | Tool | Offline box dieline generator: dimensions + board thickness → 1:1 mm SVG or PDF; single HTML in `release/` (NealZhouPanda, MIT) | — | 43M |
+| [`loom/`](loom/) | Skill | `loom-textures`: seamless game textures & PBR materials as JS code (bricks, stone, wood, metal, rust, lava, sci-fi…) → albedo/normal/height/roughness/metallic/AO/ORM/emissive + lit previews, seam check, live viewer; local, needs Node ≥22.18 + `npm install` (uilianks, MIT) | 1 | 7.2M |
+| [`shader-skills/`](shader-skills/) | Skill | `shader-art-coding`: procedural GLSL/Shadertoy shaders — noise/fBm, SDF raymarching, terrain, water, clouds, generative art; bundler + checker + examples (gokayfem, MIT) | 1 | 8.1M |
+| [`scenario-skills/`](scenario-skills/) | Tool+Skill | Scenario AI skills: seamless/tileable textures, tile-preserving upscale, PBR retexture (`scenario-textures`, `scenario-patina-retexture`), plus image/video/audio/3D gen and Blender/Maya/ZBrush/Unreal/Unity/Godot/Roblox experts — **generation needs the Scenario MCP (paid account)** (scenario-labs, MIT) — `tests/` removed | 167 | 28M |
+| [`Materialize/`](Materialize/) | Tool | Materialize: photo → PBR maps (height, normal, metallic, smoothness, edge, AO) with live preview, to replicate real materials; folder is the Unity source project — get the Windows build from the repo's Releases (Bounding Box Software, GPL-3.0) | — | 32M |
 | [`archify/`](archify/) | Tool+Skill | Full diagram-tool repo (~313MB: website, viewer, benchmarks) — only its 2 skills kept: `archify` (architecture/flow/sequence diagrams as HTML) + `archify-review` (repo-maintainer only) (tt-a1i) | 2 | 8.6M |
 | [`Agent-Reach/`](Agent-Reach/) | Tool+Skill | CLI that reads/searches Twitter/Reddit/YouTube/GitHub/Bilibili/XHS, no API keys — only the skill wrapper kept, **needs the `agent-reach` CLI installed** (Panniantong) | 1 | 104K |
 | [`VoiceStudio/`](VoiceStudio/) | Tool+Skill | Local ElevenLabs-alternative voice app (Electron+backend+frontend) — only `skills/` kept, **needs VoiceStudio installed and running** (debpalash) | 2 | 64K |

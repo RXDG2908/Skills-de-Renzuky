@@ -520,6 +520,18 @@ for name, desc, folder in [
     rows.append(entry(name, desc, f"{BASE}/{folder}", "tool"))
 total += len(rows); out.append("\n".join(rows) + "\n")
 
+# 44. texturas HD / PBR / materiales [batch 2026-10-29]
+section("Texturas HD, PBR & materiales (skills + 1 tool)",
+        "Batch 2026-10-29. loom (uilianks, MIT): texturas seamless + mapas PBR como código JS, local (Node ≥22.18). shader-skills (gokayfem, MIT): texturas procedurales en GLSL. scenario-skills (scenario-labs, MIT): skills que manejan el MCP de Scenario (de pago) — texturas tileables, upscale que conserva el tile, retexturizado PBR, más imagen/vídeo/audio/3D y expertos de Blender/Maya/ZBrush/Unreal/Unity/Godot/Roblox. Tool: Materialize (foto → mapas PBR).")
+rows = []
+for f in [f"{BASE}/loom/SKILL.md"] + sorted(glob.glob(f"{BASE}/shader-skills/skills/*/SKILL.md")) + sorted(glob.glob(f"{BASE}/scenario-skills/skills/**/SKILL.md", recursive=True)):
+    fm = frontmatter(read(f))
+    name = fm.get("name", os.path.basename(os.path.dirname(f)))
+    grp = f.replace("\\", "/").replace(BASE + "/", "").split("/")[0]
+    rows.append(entry(name, clean(fm.get("description",""), 220), os.path.dirname(f), grp))
+rows.append(entry("materialize", "Materialize (Bounding Box Software, GPL-3.0): foto → material PBR (height, normal, metallic, smoothness, edge, AO) con preview en vivo; para replicar materiales reales. La carpeta es el proyecto Unity (fuente); para usarlo, descarga el build de Windows desde Releases del repo.", f"{BASE}/Materialize", "tool"))
+total += len(rows); out.append("\n".join(rows) + "\n")
+
 out.insert(3, f"\n**Total: {total} entradas.**\n")
 
 io.open(f"{BASE}/CATALOG.md", "w", encoding="utf-8").write("\n".join(out))

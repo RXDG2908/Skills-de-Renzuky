@@ -4,7 +4,7 @@ Dos formas de buscar una skill:
 
 1. **Este archivo (`TEMAS.md`)** — mapa por *propósito*: ¿qué quieres hacer? (code, web,
    diseño, vídeo, audio, animación, contenido…). Te lleva a la carpeta/skill correcta.
-2. **[`CATALOG.md`](CATALOG.md)** — índice plano de las 2127 entradas. Haz Ctrl-F por
+2. **[`CATALOG.md`](CATALOG.md)** — índice plano de las 2297 entradas. Haz Ctrl-F por
    palabra clave y abre el `SKILL.md`/`DESIGN.md` de la ruta indicada.
 
 Y en cualquier proyecto, di **"usa skills"** para que se elija y aplique la mejor
@@ -176,6 +176,21 @@ Figuras armables, plantillas de corte, encajes simétricos, dielines de empaques
 
 Para papercraft de figuras: modelo en Blender (o `open-design-skills/skills/fal-3d`) →
 `Export-Paper-Model` → PDF con las skills de pdf. Para encajes exactos: `boxes/` u OpenSCAD.
+
+---
+
+## 🧱 Texturas HD, PBR & materiales
+Texturas seamless/tileables, mapas PBR (albedo, normal, height, roughness, metallic, AO), réplica de materiales desde foto, upscale.
+
+| Carpeta | Tipo | Qué | Nº |
+|---|---|---|---|
+| [`loom/`](loom/) | Skill | **Primera opción, local y gratis.** Texturas seamless por construcción escritas como código JS (ladrillo, piedra, madera, metal, óxido, lava, sci-fi…) → todos los mapas PBR + preview iluminada, aviso de costuras, visor en vivo. Requiere Node ≥22.18 y `npm install` | 1 |
+| [`Materialize/`](Materialize/) | Tool | **Réplica desde foto**: foto de una superficie → height, normal, metallic, smoothness, AO. Proyecto Unity; usar el build de Windows de Releases | — |
+| [`scenario-skills/`](scenario-skills/) | Tool+Skill | `scenario-textures` (tileables desde texto o referencia, packs temáticos, upscale 2×–8× sin romper el tile), `scenario-patina-retexture` (PBR sobre una malla), `dcc/blender/scenario-blender-texturing-shading` y `-uv-baking`, `game-engines/unreal/scenario-unreal-materials`. Necesita el MCP de Scenario (de pago) | 167 |
+| [`shader-skills/`](shader-skills/) | Skill | Texturas procedurales en GLSL (ruido, terreno, agua, nubes): resolución ilimitada, para web/juegos | 1 |
+
+Flujo típico: genera o replica la base (`loom`, Materialize, `fal-generate`/`fal-image-edit`) →
+upscale (`fal-upscale`, `scenario-textures`) → aplicar/hornear en Blender vía Blender MCP.
 
 ---
 
