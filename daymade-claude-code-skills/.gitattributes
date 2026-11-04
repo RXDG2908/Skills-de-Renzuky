@@ -1,0 +1,3 @@
+# For local/hosted merge disagreements, follow the merge-semantics diagnostic
+# in github-review-pr/SKILL.md.
+CHANGELOG.md merge=union

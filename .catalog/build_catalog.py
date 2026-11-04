@@ -532,6 +532,30 @@ for f in [f"{BASE}/loom/SKILL.md"] + sorted(glob.glob(f"{BASE}/shader-skills/ski
 rows.append(entry("materialize", "Materialize (Bounding Box Software, GPL-3.0): foto → material PBR (height, normal, metallic, smoothness, edge, AO) con preview en vivo; para replicar materiales reales. La carpeta es el proyecto Unity (fuente); para usarlo, descarga el build de Windows desde Releases del repo.", f"{BASE}/Materialize", "tool"))
 total += len(rows); out.append("\n".join(rows) + "\n")
 
+# 45. metodología, oficiales, BD, modding, video [batch 2026-10-30]
+section("Metodología, oficiales, BD, modding de juegos & video (batch 2026-10-30)",
+        "Batch 2026-10-30. Metodología: superpowers (obra), karpathy-skills, mattpocock-skills, everything-claude-code (ECC completo; sus copias traducidas en docs/ se omiten). Oficiales: anthropic-skills-official, supabase-agent-skills. BD: onewave-claude-skills (schema designer, migrator). Juegos: minecraft-* (Fabric/NeoForge/Forge/Paper), sourcepawn-l4d2 (SourceMod L4D2, va con el MCP l4d2), awesome-gamedev-agent-skills (Godot/Unity/Roblox). Video: claude-video (watch), ykdojo-yt-dlp, daymade (youtube-downloader), OpenMontage (AGPL; Remotion/HyperFrames/ffmpeg; copias .claude/.agents deduplicadas).")
+rows = []
+seen = set()
+for repo in ["superpowers", "karpathy-skills", "mattpocock-skills", "everything-claude-code",
+             "anthropic-skills-official", "supabase-agent-skills", "onewave-claude-skills",
+             "minecraft-agent-skills", "minecraft-dev-skill", "minecraft-mod-dev", "minecraft-forge-skills",
+             "minecraft-mod-builder", "sourcepawn-l4d2", "awesome-gamedev-agent-skills",
+             "claude-video", "ykdojo-yt-dlp", "daymade-claude-code-skills", "OpenMontage",
+             "remotion-skills-official", "hyperframes-official", "ffmpeg-skill", "cut-as-code",
+             "talking-head-rough-cut", "video-editing-ffmpeg-whisper", "cut-video", "rondoflow"]:
+    for f in sorted(glob.glob(f"{BASE}/{repo}/**/SKILL.md", recursive=True, include_hidden=True)):
+        p = f.replace("\\", "/")
+        if any(x in p for x in ("/docs/", "/node_modules/", "/tests/", "/test-fixtures/")):
+            continue
+        fm = frontmatter(read(f))
+        name = fm.get("name", os.path.basename(os.path.dirname(f)))
+        if (repo, name) in seen:
+            continue
+        seen.add((repo, name))
+        rows.append(entry(name, clean(fm.get("description",""), 220), os.path.dirname(f), repo))
+total += len(rows); out.append("\n".join(rows) + "\n")
+
 out.insert(3, f"\n**Total: {total} entradas.**\n")
 
 io.open(f"{BASE}/CATALOG.md", "w", encoding="utf-8").write("\n".join(out))

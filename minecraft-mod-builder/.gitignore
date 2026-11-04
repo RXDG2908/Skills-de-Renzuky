@@ -1,0 +1,60 @@
+# Claude Code
+.claude/
+CLAUDE.md
+.mcp.json
+
+# Memory / planning artifacts
+memory/
+.planning/
+
+# Gradle (Minecraft mod builds)
+.gradle/
+build/
+out/
+bin/
+*.jar
+*.class
+run/
+runs/
+run-data/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.eclipse/
+.project
+.classpath
+.settings/
+.metadata/
+.factorypath
+.apt_generated/
+
+# NetBeans
+nbproject/private/
+nbbuild/
+nbdist/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# Logs & temp
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+
+# Env / secrets
+.env
+.env.*
+*.local
+
+# Node (if any tooling)
+node_modules/

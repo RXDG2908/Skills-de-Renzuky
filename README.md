@@ -9,7 +9,7 @@ Two ways to find a skill:
 - **[`TEMAS.md`](TEMAS.md)** — topic map by *purpose* (code, web, design, video, audio,
   animation, 2D characters, image, content/social, ads, docs, automation, reference).
   Start here when you know *what you want to do*.
-- **[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 2297 entries (skills +
+- **[`CATALOG.md`](CATALOG.md)** — flat one-line index of all 5611 entries (skills +
   design-systems + templates). Grep it by keyword, then open the `SKILL.md` / `DESIGN.md`
   at the path shown. Regenerate with `python .catalog/build_catalog.py`.
 
@@ -86,6 +86,33 @@ skill was extracted, and using it for real may require that tool installed/runni
 | [`awesome-design-skills/`](awesome-design-skills/) | Skill | `SKILL.md` + `DESIGN.md` style systems (bergside) | 68 | 632K |
 | [`html-ppt-skill/`](html-ppt-skill/) | Skill | HTML PPT Studio: 36 themes, decks, layouts, animations (lewislulu) — keeps `.git` | 1 | 21M |
 | [`huashu-design/`](huashu-design/) | Skill | 花叔Design: HTML prototypes, slides, GSAP animation, MP4/GIF export, review | 1 | 32M |
+| [`superpowers/`](superpowers/) | Skill | Plan → execute → verify workflow: brainstorming, writing-plans, TDD, systematic-debugging, subagent-driven dev (obra, MIT) — `hooks/` inert unless installed as plugin | 15 | 2.0M |
+| [`karpathy-skills/`](karpathy-skills/) | Skill | Karpathy-inspired coding guidelines: think first, simplicity, surgical changes, goal-driven (forrestchang/multica-ai; third-party, not by Karpathy) | 1 | 57K |
+| [`mattpocock-skills/`](mattpocock-skills/) | Skill | Matt Pocock's `.claude` skills: PRD, TDD, refactor, git safety (MIT) | 38 | 1.1M |
+| [`everything-claude-code/`](everything-claude-code/) | Skill | Full affaan-m/ECC monorepo: 1000+ skills incl. translated copies under `docs/`, agents, hooks (MIT) — supersets `ecc-affaan-skills/` | 1068 | 70M |
+| [`anthropic-skills-official/`](anthropic-skills-official/) | Skill | Official `anthropics/skills` (2026-10-28 snapshot): mcp-builder, webapp-testing, skill-creator, docx/pdf/pptx/xlsx, theme-factory… — newer than the copies in `awesome-claude-skills/` | 20 | 13M |
+| [`supabase-agent-skills/`](supabase-agent-skills/) | Skill | Official Supabase: `postgres-best-practices` (schema, indexes, RLS) + supabase (MIT) | 2 | 374K |
+| [`onewave-claude-skills/`](onewave-claude-skills/) | Skill | 233 mixed skills incl. `database-schema-designer` (DDL + rollback migrations) and `database-migrator` (OneWave-AI, MIT) | 233 | 8.5M |
+| [`minecraft-agent-skills/`](minecraft-agent-skills/) | Skill | Minecraft: NeoForge/Fabric modding, Architectury multiloader, plugins, datapacks (Jahrome907, MIT) | 61 | 3.0M |
+| [`minecraft-dev-skill/`](minecraft-dev-skill/) | Skill | Minecraft Java 1.21.1–26.2: Fabric, NeoForge, Paper, Bukkit/Spigot, server ops — copy whole folders, not just SKILL.md (Extez61, MIT) | 6 | 732K |
+| [`minecraft-mod-dev/`](minecraft-mod-dev/) | Skill | NeoForge/Fabric mod dev; fetches current loader docs; JEI/AE2/Create integration (chouzz) | 1 | 23K |
+| [`minecraft-forge-skills/`](minecraft-forge-skills/) | Skill | Forge, NeoForge, NeoGradle, GregTech Modern, Bedrock GameTest — no Fabric (mrquentin) | 5 | 105K |
+| [`minecraft-mod-builder/`](minecraft-mod-builder/) | Skill | Step-by-step first-mod guide, Fabric or NeoForge (Riloox) | 1 | 75K |
+| [`sourcepawn-l4d2/`](sourcepawn-l4d2/) | Skill | Left 4 Dead 2 SourceMod plugins: write/review/debug/compile, Left4DHooks refs (Mart-User, GPL-3.0) — pairs with the `l4d2` MCP for live server testing | 1 | 5.7M |
+| [`awesome-gamedev-agent-skills/`](awesome-gamedev-agent-skills/) | Skill | Game dev by engine: Godot (15), Unity (8), Roblox/Luau, more (gamedev-skills, Apache-2.0) | 78 | 4.2M |
+| [`claude-video/`](claude-video/) | Skill | `watch`: download a video (yt-dlp), extract frames + transcript so Claude can analyze it (bradautomates, MIT) — needs yt-dlp + ffmpeg | 1 | 557K |
+| [`ykdojo-yt-dlp/`](ykdojo-yt-dlp/) | Skill | yt-dlp: video, audio, subtitles from YouTube and 1000+ sites (ykdojo/safeclaw) | 1 | 4K |
+| [`daymade-claude-code-skills/`](daymade-claude-code-skills/) | Skill | 121 mixed skills incl. `youtube-downloader` (HLS, transcripts), `video-comparer` (daymade, MIT) | 121 | 34M |
+| [`OpenMontage/`](OpenMontage/) | Tool+Skill | Agentic video production system: 140 skills (Remotion, HyperFrames, ffmpeg, video-edit/download/translate/understand, avatars, music-to-video) — skills live in `.claude/skills` + `.agents/skills`; full pipelines need its Python app (calesthio, **AGPL-3.0**) | 140 | 91M |
+| [`remotion-skills-official/`](remotion-skills-official/) | Skill | Official Remotion skills (remotion-dev/skills): best-practices, create, render, captions, upgrade… — Remotion itself runs via `npx` per project | 12 | 3.0M |
+| [`hyperframes-official/`](hyperframes-official/) | Skill | Official HyperFrames skills (heygen-com, Apache-2.0): hyperframes, -cli, -registry, media-use, remotion-to-hyperframes, slideshow, figma + `.claude/skills` (captions-overlay, cut-the-curve, motion-doctrine…) — skill payload only; the 108M `registry/` blocks and app source left out; CLI via `npx hyperframes` | 13 | 22M |
+| [`ffmpeg-skill/`](ffmpeg-skill/) | Tool+Skill | Local editor for agents: 42 FFmpeg tools (cut, captions, reframe, loudness, platform exports) + an MCP server — MCP not installed (kajisho5, MIT) | 14 | 22M |
+| [`cut-as-code/`](cut-as-code/) | Skill | Video editing as code: video-understand → cut, captions, b-roll, content cards, motion graphics (343M recipe library), color grade, `video-to-shorts` (WhiteTowerAI, MIT) | 10 | 357M |
+| [`talking-head-rough-cut/`](talking-head-rough-cut/) | Skill | Rough cut for talking-head clips: join, remove silences/filler, keep last take, transcribe (ffmpeg + whisper.cpp; Win/macOS/Linux) (vincentventalon, MIT) | 2 | 852K |
+| [`video-editing-ffmpeg-whisper/`](video-editing-ffmpeg-whisper/) | Skill | Trim, jump cut, captions (Hormozi/standard/minimal), text overlay, speed — Bash + FFmpeg + Whisper (6missedcalls, MIT) | 1 | 86K |
+| [`cut-video/`](cut-video/) | Skill | Tighten long recordings: remove silences/ums/dead air, keep laughs and comedic pauses (louisedesadeleer, MIT) | 1 | 72K |
+| [`rondoflow/`](rondoflow/) | Tool+Skill | RondoFlow skill catalog: 2320 aggregated skills (`catalog/skills/*`, e.g. `download-videos-from-sites`, `download-videos-audio-with-ytdlp`) + agents/canvas templates; the visual multi-agent app itself left out (rondoflow, MIT — see `THIRD_PARTY_NOTICES.md`) | 2320 | 26M |
+| [`awesome-claude-code/`](awesome-claude-code/) | Not skills | Curated list of Claude Code skills, hooks, commands, plugins (hesreallyhim) — links out | — | 3.5M |
 | [`awesome-claude-design/`](awesome-claude-design/) | Not skills | Curated index of `DESIGN.md` files (VoltAgent) — `README.md` only, links out | — | 24K |
 | [`behisecc-awesome-claude-skills/`](behisecc-awesome-claude-skills/) | Not skills | Curated awesome-list of Claude Skills by category (BehiSecc) — `README.md` only, links out to external repos; nothing invocable here | — | 264K |
 | [`claude-quickstarts/`](claude-quickstarts/) | Not skills | Anthropic example apps — reference only (see `NOTE.md`) | — | 8.5M |

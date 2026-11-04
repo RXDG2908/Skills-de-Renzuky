@@ -1,0 +1,2223 @@
+#!/usr/bin/env python3
+"""
+Read chronological evidence from Claude Code session files.
+
+Produces a structured Markdown briefing by fusing:
+- Session index metadata (sessions-index.json)
+- Every physical user/assistant record, including pre-compaction history
+- Compact boundary summaries (continuation context, not human-authored turns)
+- Active-home and registered-archive copy identity
+- Subagent workflow state (multi-agent recovery)
+- Session end reason detection
+- Git workspace state
+- MEMORY.md persistent context
+- Interrupted tool-call detection
+
+Usage:
+    # Extract context from latest session for current project
+    python3 read_claude_session.py
+
+    # Extract context from a specific session
+    python3 read_claude_session.py --session <SESSION_ID>
+
+    # Search sessions by topic
+    python3 read_claude_session.py --query "auth feature"
+
+    # List recent sessions
+    python3 read_claude_session.py --list
+
+    # Specify project path explicitly
+    python3 read_claude_session.py --project /path/to/project
+"""
+
+import argparse
+import hashlib
+import json
+import math
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import Dict, List, Optional
+
+CLAUDE_DIR = Path.home() / ".claude"
+PROJECTS_DIR = CLAUDE_DIR / "projects"  # default home only; discovery below spans all homes
+
+# Multi-home discovery lives in the bundled `_core` package (SSOT:
+# daymade-claude-code/_conversation_core/, copied here by sync_core.py) so a
+# project whose history lives under a per-model profile home is not missed.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _core.homes import discover_claude_homes  # noqa: E402
+from _core.claude import scan_claude_session  # noqa: E402
+from _core.parse import parse_date_boundary, parse_timestamp  # noqa: E402
+from _core.text import is_local_command_record  # noqa: E402
+from _core.sources import (  # noqa: E402
+    HistorySourceConfigError,
+    discover_claude_sources,
+)
+from analyze_sessions import SessionAnalyzer  # noqa: E402
+
+# Message types that are noise — skip when extracting context
+NOISE_TYPES = {"progress", "queue-operation", "file-history-snapshot", "last-prompt"}
+# System message subtypes that are noise
+NOISE_SUBTYPES = {"api_error", "turn_duration", "stop_hook_summary"}
+
+# Patterns that indicate system/internal content, not real user requests
+NOISE_USER_PATTERNS = [
+    "This session is being continued",
+    "<task-notification>",
+    "<system-reminder>",
+]
+
+
+class SessionEvidenceError(RuntimeError):
+    """A selected Claude Session cannot be rendered as complete evidence."""
+
+
+def normalize_path(project_path: str) -> str:
+    """Convert absolute path to Claude's normalized directory name."""
+    return project_path.replace("/", "-")
+
+
+def _newest_session_mtime(project_dir: Path) -> float:
+    """Most-recent real session-file mtime under a project dir (0.0 if none).
+
+    Excludes `agent-*.jsonl` sub-agent side-files so a stray sub-agent write can't
+    sway which config home wins the cross-home tiebreak in find_project_dir.
+    """
+    return max(
+        (
+            f.stat().st_mtime
+            for f in project_dir.glob("*.jsonl")
+            if not f.name.startswith("agent-")
+        ),
+        default=0.0,
+    )
+
+
+def find_project_dir(project_path: str) -> Optional[Path]:
+    """Find the Claude project dir for a path, searching ALL config homes.
+
+    The default home ~/.claude is only one place history can live; per-model
+    profiles keep theirs under ~/.claude-profiles/<name>/ etc. We look in every
+    home and decide exact-vs-fuzzy GLOBALLY (as the finder skill does): if the
+    exact encoded dir exists in any home, only exact matches count — so a
+    different project that merely shares the basename in another profile is
+    never picked; the substring fallback runs only when NO home has the exact
+    dir. When the same project exists under several homes, the one whose newest
+    session is most recent wins, so "resume my last session" lands on the
+    truly-latest one regardless of which profile it ran under.
+    """
+    abs_path = os.path.abspath(project_path)
+    normalized = normalize_path(abs_path)
+
+    exact_hits: List[Path] = []
+    fuzzy_hits: List[Path] = []
+    for home in discover_claude_homes():
+        projects_dir = home / "projects"
+        if not projects_dir.is_dir():
+            continue
+
+        # Path already points inside this home's projects/.
+        projects_str = str(projects_dir) + "/"
+        if abs_path.startswith(projects_str):
+            candidate = Path(abs_path)
+            if candidate.is_dir():
+                exact_hits.append(candidate)
+                continue
+            top_dir = projects_dir / abs_path[len(projects_str):].split("/")[0]
+            if top_dir.is_dir():
+                exact_hits.append(top_dir)
+                continue
+
+        # Exact encoded-name match in this home.
+        candidate = projects_dir / normalized
+        if candidate.is_dir():
+            exact_hits.append(candidate)
+            continue
+
+        # Substring fallback — recorded separately and only used when no home
+        # has an exact match, to avoid cross-home basename conflation.
+        for d in projects_dir.iterdir():
+            if d.is_dir() and normalized in d.name:
+                fuzzy_hits.append(d)
+                break
+
+    hits = exact_hits or fuzzy_hits
+    if not hits:
+        return None
+    hits.sort(key=_newest_session_mtime, reverse=True)
+    return hits[0]
+
+
+def discover_session_refs(
+    project_path: str, manifest_path: Optional[str] = None
+) -> tuple[List[Dict], List[str]]:
+    """Find project Sessions across active homes and registered archives."""
+    sources, warnings = discover_claude_sources(manifest_path=manifest_path)
+    analyzer = SessionAnalyzer(sources=sources, warnings=warnings)
+    return analyzer.find_project_sessions(project_path), warnings
+
+
+def discover_exact_session_refs(
+    session_id: str, manifest_path: Optional[str] = None, *, canonical_only: bool = False
+) -> tuple[List[Dict], List[str]]:
+    """Find exact Session candidates across every project and source.
+
+    An exact Session ID is evidence identity, not a project guess. Reuse the
+    analyzer's candidate-first byte scan so this does not fully parse every
+    Session in every project. Candidate files still pass the exact reader's
+    record-identity and copy-divergence gates before any briefing is emitted.
+    """
+    sources, warnings = discover_claude_sources(manifest_path=manifest_path)
+    analyzer = SessionAnalyzer(sources=sources, warnings=warnings)
+
+    # Claude's canonical file name is <Session-ID>.jsonl. Check that exact
+    # shape across every project first: it is bounded by the number of project
+    # directories and avoids scanning a multi-gigabyte history corpus for the
+    # UUID. Filename identity only selects candidates; parse-time record
+    # identity remains authoritative below.
+    copies = []
+    matched_sources = []
+    for source in sources:
+        projects_dir = source.home / "projects"
+        if not projects_dir.is_dir():
+            continue
+        for project_dir in projects_dir.iterdir():
+            if not project_dir.is_dir():
+                continue
+            candidate = project_dir / f"{session_id}.jsonl"
+            if not candidate.is_file():
+                continue
+            copies.append({"path": candidate, "source": source})
+            if source not in matched_sources:
+                matched_sources.append(source)
+
+    if copies:
+        return (
+            [
+                {
+                    "session_id": session_id,
+                    "path": Path(copies[0]["path"]),
+                    "copies": copies,
+                    "sources": matched_sources,
+                    "homes": [source.home for source in matched_sources],
+                }
+            ],
+            warnings,
+        )
+
+    if canonical_only:
+        return [], warnings
+
+    # A registered archive may preserve the right record identity under a
+    # renamed file. Fall back to the analyzer's byte-level candidate scan only
+    # when the canonical filename was absent everywhere.
+    refs, _total, _projects, _prefiltered = analyzer.find_search_sessions(
+        project_path=None,
+        all_projects=True,
+        keywords=[session_id],
+        case_sensitive=True,
+        use_prefilter=True,
+        exclude_sessions=set(),
+    )
+    return refs, warnings
+
+
+def _resolved_path_key(path: Path) -> str:
+    try:
+        return str(path.resolve())
+    except (OSError, RuntimeError):
+        return str(path.absolute())
+
+
+def _file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(block)
+    except OSError as error:
+        raise SessionEvidenceError(f"cannot read Claude Session copy {path}: {error}") from error
+    return digest.hexdigest()
+
+
+def _is_byte_prefix(shorter: Path, longer: Path) -> bool:
+    """Return whether ``shorter`` is exactly the initial bytes of ``longer``."""
+    try:
+        if shorter.stat().st_size > longer.stat().st_size:
+            return False
+        with shorter.open("rb") as left, longer.open("rb") as right:
+            while True:
+                block = left.read(1 << 20)
+                if not block:
+                    return True
+                if right.read(len(block)) != block:
+                    return False
+    except OSError as error:
+        raise SessionEvidenceError(
+            f"cannot compare Claude Session copies {shorter} and {longer}: {error}"
+        ) from error
+
+
+def select_session_copy(ref: Dict) -> tuple[Path, List[str], List[Path]]:
+    """Choose one provably complete physical copy for a merged Session ref.
+
+    Byte-identical active/archive copies are one evidence object. An older
+    append-only snapshot is also safe when it is an exact byte prefix of a longer
+    copy. Divergent copies cannot be merged into a trustworthy chronology without
+    inventing ordering, so the exact reader fails closed and names every path.
+    """
+    raw_copies = ref.get("copies") or [
+        {
+            "path": ref["path"],
+            "source": (ref.get("sources") or [None])[0],
+        }
+    ]
+    by_real_path: Dict[str, Dict] = {}
+    all_labels: List[str] = []
+    for item in raw_copies:
+        path = Path(item["path"])
+        source = item.get("source")
+        label = getattr(source, "display_label", None)
+        if label and label not in all_labels:
+            all_labels.append(label)
+        key = _resolved_path_key(path)
+        existing = by_real_path.get(key)
+        if existing is None:
+            by_real_path[key] = {
+                "path": path,
+                "active": getattr(source, "kind", None) == "active",
+            }
+        elif getattr(source, "kind", None) == "active":
+            existing["active"] = True
+
+    candidates = list(by_real_path.values())
+    if not candidates:
+        raise SessionEvidenceError(
+            f"Session {ref.get('session_id', '?')} has no readable physical copy"
+        )
+    if len(candidates) == 1:
+        return candidates[0]["path"], all_labels, [candidates[0]["path"]]
+
+    digests: Dict[str, List[Dict]] = {}
+    for candidate in candidates:
+        digests.setdefault(_file_digest(candidate["path"]), []).append(candidate)
+    if len(digests) == 1:
+        chosen = max(candidates, key=lambda item: bool(item["active"]))
+        return chosen["path"], all_labels, [item["path"] for item in candidates]
+
+    longest_size = max(item["path"].stat().st_size for item in candidates)
+    longest = [
+        item for item in candidates if item["path"].stat().st_size == longest_size
+    ]
+    for candidate in sorted(longest, key=lambda item: bool(item["active"]), reverse=True):
+        if all(
+            other is candidate
+            or _is_byte_prefix(other["path"], candidate["path"])
+            for other in candidates
+        ):
+            return candidate["path"], all_labels, [item["path"] for item in candidates]
+
+    paths = ", ".join(str(item["path"]) for item in candidates)
+    raise SessionEvidenceError(
+        f"Session {ref.get('session_id', '?')} resolves to divergent physical copies; "
+        f"no copy is a complete append-only superset: {paths}"
+    )
+
+
+def validate_selected_session_identity(
+    observed_ids: set[str], expected_session_id: str
+) -> None:
+    """Reject fused or mismatched Claude Session evidence."""
+    if len(observed_ids) > 1:
+        raise SessionEvidenceError(
+            "selected Claude Session file contains multiple Session identities: "
+            f"{sorted(observed_ids)!r}; requested {expected_session_id!r}. "
+            "Records cannot be attributed safely."
+        )
+    if not observed_ids:
+        raise SessionEvidenceError(
+            "selected Claude Session has no record-level Session identity; "
+            f"the filename cannot prove requested Session {expected_session_id!r}"
+        )
+    if expected_session_id not in observed_ids:
+        raise SessionEvidenceError(
+            "selected Claude Session identity mismatch: requested "
+            f"{expected_session_id!r}, observed {sorted(observed_ids)!r}"
+        )
+
+
+def load_sessions_index(project_dir: Path) -> List[Dict]:
+    """Load and parse sessions-index.json, sorted by modified desc."""
+    index_file = project_dir / "sessions-index.json"
+    if not index_file.exists():
+        return []
+    with open(index_file, encoding="utf-8") as f:
+        data = json.load(f)
+    entries = data.get("entries", [])
+    entries.sort(key=lambda e: e.get("modified", ""), reverse=True)
+    return entries
+
+
+def search_sessions(entries: List[Dict], query: str) -> List[Dict]:
+    """Search sessions by keyword in firstPrompt and summary."""
+    query_lower = query.lower()
+    results = []
+    for entry in entries:
+        first_prompt = (entry.get("firstPrompt") or "").lower()
+        summary = (entry.get("summary") or "").lower()
+        if query_lower in first_prompt or query_lower in summary:
+            results.append(entry)
+    return results
+
+
+def format_session_entry(entry: Dict, file_exists: bool = True) -> str:
+    """Format a session index entry for display."""
+    sid = entry.get("sessionId", "?")
+    modified = entry.get("modified", "?")
+    msgs = entry.get("messageCount", "?")
+    branch = entry.get("gitBranch", "?")
+    prompt = (entry.get("firstPrompt") or "")[:80]
+    ghost = "" if file_exists else "  [file missing]"
+    return f"  {sid}  [{branch}]  {msgs} msgs  {modified}{ghost}\n    {prompt}"
+
+
+# ── Session file parsing ────────────────────────────────────────────
+
+
+def parse_session_structure(session_file: Path, *, collect_tool_evidence: bool = False) -> Dict:
+    """Parse every physical record in one selected Claude Session.
+
+    This reader is the evidence source for continuation. A previous resume-oriented
+    implementation deliberately read only a size-adaptive tail (or only records
+    after the last compaction boundary). That was useful for saving context, but it
+    could erase the original business outcome while still returning exit 0. Exact
+    Session evidence therefore scans the whole file; output clipping remains a
+    presentation concern handled by ``--full``.
+
+    Any non-empty malformed JSONL line aborts the read. Returning a polished partial
+    receipt would make the missing record indistinguishable from "the user never
+    said it," which is the failure this Skill exists to prevent.
+    """
+    file_size = session_file.stat().st_size
+    total_lines = 0
+
+    # First pass: find compact boundaries and count lines
+    compact_boundaries = []  # (line_num, summary_text)
+    with open(session_file, encoding="utf-8") as f:
+        prev_boundary_line = None
+        for i, raw_line in enumerate(f):
+            total_lines += 1
+
+            # Detect compact summary via isCompactSummary flag (most reliable)
+            if '"isCompactSummary"' in raw_line:
+                try:
+                    obj = json.loads(raw_line)
+                    if obj.get("isCompactSummary"):
+                        content = obj.get("message", {}).get("content", "")
+                        if isinstance(content, str):
+                            boundary_line = prev_boundary_line if prev_boundary_line is not None else max(0, i - 1)
+                            compact_boundaries.append((boundary_line, content))
+                        prev_boundary_line = None
+                        continue
+                except json.JSONDecodeError:
+                    pass
+
+            # Detect compact_boundary marker
+            if '"compact_boundary"' in raw_line and '"subtype"' in raw_line:
+                try:
+                    obj = json.loads(raw_line)
+                    if obj.get("subtype") == "compact_boundary":
+                        prev_boundary_line = i
+                        continue
+                except json.JSONDecodeError:
+                    pass
+
+            # Fallback: if prev line was boundary and this is a user message with long string content
+            if prev_boundary_line is not None:
+                try:
+                    obj = json.loads(raw_line)
+                    content = obj.get("message", {}).get("content", "")
+                    if isinstance(content, str) and len(content) > 100:
+                        compact_boundaries.append((prev_boundary_line, content))
+                except (json.JSONDecodeError, AttributeError):
+                    compact_boundaries.append((prev_boundary_line, ""))
+                prev_boundary_line = None
+
+    # Second pass: extract the complete physical Session chronology.
+    parsed_range_start = 0
+    messages = []
+    # Order-independent tool_use/tool_result resolution: a tool_result can be
+    # written to the file BEFORE the tool_use it answers (see "Tool Use /
+    # Tool Result Ordering" in references/session_file_format.md and the
+    # 11/14-files-flipped measurement in analyze_sessions.py's
+    # classify_session_tail, which already uses this two-set shape).
+    # Accumulate both sides without removal and diff once after the loop —
+    # incremental add/discard silently strands ids when the result lands first.
+    dispatched_tool_calls = {}  # tool_use_id -> tool_use_info
+    resolved_tool_use_ids = set()
+    plan_bindings = []
+    tail_is_interrupt = False
+    errors = []
+    files_touched = set()
+    last_message_role = None
+    last_assistant_has_text = False
+    error_count = 0
+    observed_session_ids = set()
+    tool_events = []
+
+    with open(session_file, encoding="utf-8") as f:
+        for i, raw_line in enumerate(f):
+            if not raw_line.strip():
+                continue
+            try:
+                obj = json.loads(raw_line)
+            except json.JSONDecodeError as error:
+                raise SessionEvidenceError(
+                    f"malformed JSONL at physical line {i + 1} in {session_file}: "
+                    f"{error}"
+                ) from error
+            if not isinstance(obj, dict):
+                raise SessionEvidenceError(
+                    f"JSONL line {i + 1} in {session_file} is not an object"
+                )
+
+            observed_id = obj.get("sessionId")
+            if isinstance(observed_id, str) and observed_id:
+                observed_session_ids.add(observed_id)
+
+            msg_type = obj.get("type", "")
+            if msg_type in NOISE_TYPES:
+                continue
+            if msg_type == "system":
+                subtype = obj.get("subtype", "")
+                if subtype in NOISE_SUBTYPES:
+                    if subtype == "api_error":
+                        error_count += 1
+                    continue
+                if subtype == "compact_boundary":
+                    continue
+
+            if msg_type == "attachment":
+                attachment = obj.get("attachment") or {}
+                origin = attachment.get("origin") or {}
+                if (
+                    attachment.get("type") == "queued_command"
+                    and origin.get("kind") == "human"
+                ):
+                    prompt = attachment.get("prompt")
+                    if isinstance(prompt, list):
+                        prompt = "\n".join(
+                            item.get("text", "")
+                            if isinstance(item, dict)
+                            else str(item)
+                            for item in prompt
+                        )
+                    if isinstance(prompt, str) and prompt.strip():
+                        messages.append(
+                            {
+                                "message": {"role": "user", "content": prompt.strip()},
+                                "timestamp": obj.get("timestamp"),
+                                "_queued_human": True,
+                            }
+                        )
+                        last_message_role = "user"
+                elif attachment.get("type") in ("plan_mode", "plan_file_reference"):
+                    # Plan binding attachments (references/session_file_format.md
+                    # "Plan binding attachments"). `plan_mode` carries the path
+                    # only; `plan_file_reference` carries the full plan content
+                    # (the post-compaction re-injection), so a deleted plan file
+                    # is still recoverable from the transcript.
+                    plan_path = attachment.get("planFilePath")
+                    if isinstance(plan_path, str) and plan_path:
+                        plan_content = attachment.get("planContent")
+                        plan_bindings.append(
+                            {
+                                "kind": attachment["type"],
+                                "plan_file_path": plan_path,
+                                "plan_exists": attachment.get("planExists"),
+                                "has_content": isinstance(plan_content, str)
+                                and bool(plan_content.strip()),
+                            }
+                        )
+                continue
+
+            # Track tool calls and results
+            msg = obj.get("message", {})
+            if not isinstance(msg, dict):
+                raise SessionEvidenceError(
+                    f"invalid message object at physical line {i + 1} in {session_file}"
+                )
+            if msg_type not in ("assistant", "user"):
+                continue
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if collect_tool_evidence and isinstance(content, list):
+                for block_index, block in enumerate(content, 1):
+                    if not isinstance(block, dict):
+                        continue
+                    kind = block.get("type")
+                    if (role, kind) not in {
+                        ("assistant", "tool_use"), ("user", "tool_result")
+                    }:
+                        continue
+                    if not isinstance(observed_id, str) or not observed_id:
+                        raise SessionEvidenceError(
+                            f"tool block has no record-level Session identity at physical line {i + 1} in {session_file}"
+                        )
+                    if (obj.get("agentId") is not None and not isinstance(obj["agentId"], str)) or (
+                        obj.get("isSidechain") is not None and not isinstance(obj["isSidechain"], bool)
+                    ):
+                        raise SessionEvidenceError(
+                            f"invalid tool lineage metadata at physical line {i + 1} in {session_file}"
+                        )
+                    if kind == "tool_use" and (
+                        not isinstance(block.get("name"), str) or not block["name"]
+                        or not isinstance(block.get("input"), dict)
+                    ):
+                        raise SessionEvidenceError(
+                            f"invalid tool name/input at physical line {i + 1} in {session_file}"
+                        )
+                    tool_events.append({
+                        "line": i + 1,
+                        "block_index": block_index,
+                        "timestamp": obj.get("timestamp"),
+                        "uuid": obj.get("uuid"),
+                        "parent_uuid": obj.get("parentUuid"),
+                        "session_id": obj.get("sessionId"),
+                        "agent_id": obj.get("agentId"),
+                        "is_sidechain": obj.get("isSidechain"),
+                        "cwd": obj.get("cwd"),
+                        "block": block,
+                    })
+            if collect_tool_evidence:
+                # The selected original blocks are the complete output surface
+                # for this mode; skip unrelated prose and briefing bookkeeping.
+                continue
+
+            # Extract tool_use from assistant messages
+            if role == "assistant" and isinstance(content, list):
+                for block in content:
+                    if not isinstance(block, dict) or block.get("type") != "tool_use":
+                        continue
+                    tool_id = block.get("id", "")
+                    tool_name = block.get("name", "?")
+                    inp = block.get("input", {})
+                    dispatched_tool_calls.setdefault(
+                        tool_id,
+                        {
+                            "name": tool_name,
+                            "input_preview": str(inp)[:200],
+                        },
+                    )
+                    # Track file operations
+                    if tool_name in ("Write", "Edit", "Read"):
+                        fp = inp.get("file_path", "")
+                        if fp:
+                            files_touched.add(fp)
+                    elif tool_name == "Bash":
+                        cmd = inp.get("command", "")
+                        for match in re.findall(r'(?<!\w)(/[a-zA-Z][\w./\-]+)', cmd):
+                            if not match.startswith("/dev/"):
+                                files_touched.add(match)
+
+            # Resolve tool results
+            if role == "user" and isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        tool_id = block.get("tool_use_id", "")
+                        resolved_tool_use_ids.add(tool_id)
+                        is_error = block.get("is_error", False)
+                        result_content = block.get("content", "")
+                        if is_error and isinstance(result_content, str):
+                            errors.append(result_content[:500])
+
+            # Track last message for end-reason detection. The interruption
+            # marker survives as `tail_is_interrupt` only when it is the LAST
+            # relevant record: any later non-local user/assistant record resets it
+            # (same semantics as analyze_sessions.classify_session_tail — a
+            # mid-session Ctrl+C the conversation continued past is not a
+            # tail interruption).
+            # Local command runtime records arrive as user messages after a
+            # completed reply. They are transport output, not a new human
+            # turn, so they cannot turn a completed session into abandoned.
+            is_local_runtime = role == "user" and is_local_command_record(content)
+            if role in ("user", "assistant"):
+                # Chronology is evidence, including runtime records.  Only
+                # terminal-state bookkeeping ignores proven local output.
+                messages.append(obj)
+                if is_local_runtime:
+                    continue
+                if (
+                    role == "user"
+                    and isinstance(content, str)
+                    and "[Request interrupted by user" in content
+                ):
+                    tail_is_interrupt = True
+                else:
+                    tail_is_interrupt = False
+                last_message_role = role
+                if role == "assistant":
+                    last_assistant_has_text = any(
+                        kind == "assistant_text" for kind, _ in _turn_kinds(obj)
+                    )
+
+    unresolved_tool_calls = {
+        tool_id: info
+        for tool_id, info in dispatched_tool_calls.items()
+        if tool_id not in resolved_tool_use_ids
+    }
+
+    # Detect session end reason
+    end_reason = _detect_end_reason(
+        last_message_role, unresolved_tool_calls, error_count, tail_is_interrupt,
+        last_assistant_has_text,
+    )
+
+    return {
+        "total_lines": total_lines,
+        "file_size": file_size,
+        "compact_boundaries": compact_boundaries,
+        "parsed_range_start": parsed_range_start,
+        "messages": messages,
+        "unresolved_tool_calls": dict(unresolved_tool_calls),
+        "plan_bindings": plan_bindings,
+        "errors": errors,
+        "error_count": error_count,
+        "files_touched": files_touched,
+        "end_reason": end_reason,
+        "observed_session_ids": observed_session_ids,
+        "tool_events": tool_events,
+    }
+
+
+def select_tool_evidence(
+    events: List[Dict], *, tools: List[str], contains: List[str],
+    ordinal: Optional[tuple[int, int]] = None,
+    from_timestamp: Optional[float] = None, to_timestamp: Optional[float] = None,
+) -> Dict:
+    """Pair original blocks by ID within their recorded agent/sidechain context.
+
+    Pairing is order independent. Duplicate or missing IDs never select one
+    convenient counterpart: keep every original block and name the uncertainty.
+    Ordinals refer to groups in first-physical-occurrence order, before filters.
+    """
+    groups = {}
+    for index, event in enumerate(events):
+        block = event["block"]
+        is_call = block["type"] == "tool_use"
+        tool_id = block.get("id" if is_call else "tool_use_id")
+        valid_id = isinstance(tool_id, str) and bool(tool_id)
+        key = (
+            tool_id, event["agent_id"], event["is_sidechain"] is True
+        ) if valid_id else ("missing_id", index)
+        group = groups.setdefault(key, {
+            "ordinal": len(groups) + 1, "tool_use_id": tool_id,
+            "calls": [], "results": [], "payload_complete": True,
+        })
+        group["calls" if is_call else "results"].append(event)
+
+    selected = []
+    unknown_time = 0
+    for group in groups.values():
+        calls, results = group["calls"], group["results"]
+        if not isinstance(group["tool_use_id"], str) or not group["tool_use_id"]:
+            status = "missing_id"
+        elif len(calls) > 1 or len(results) > 1:
+            status = "ambiguous"
+        elif not calls:
+            status = "missing_call"
+        elif not results:
+            status = "missing_result"
+        else:
+            status = "paired"
+        group["pairing_status"] = status
+        if tools and not any(call["block"].get("name") in tools for call in calls):
+            continue
+        # Search both original call input and result text; all repeated literals
+        # must match somewhere in this pair. Do not search unrelated prose.
+        def text_values(value):
+            if isinstance(value, str):
+                yield value
+            elif isinstance(value, dict):
+                for child in value.values():
+                    yield from text_values(child)
+            elif isinstance(value, list):
+                for child in value:
+                    yield from text_values(child)
+
+        searchable = list(
+            text for event in calls + results for text in text_values(event["block"])
+        )
+        if not all(any(literal in text for text in searchable) for literal in contains):
+            continue
+        if ordinal and not ordinal[0] <= group["ordinal"] <= ordinal[1]:
+            continue
+        anchor = (calls or results)[0]
+        timestamp = parse_timestamp(anchor["timestamp"])
+        if from_timestamp is not None or to_timestamp is not None:
+            if timestamp is None or not math.isfinite(timestamp):
+                unknown_time += 1
+                continue
+            if from_timestamp is not None and timestamp < from_timestamp:
+                continue
+            if to_timestamp is not None and timestamp > to_timestamp:
+                continue
+        selected.append(group)
+    return {
+        "groups": selected, "groups_examined": len(groups),
+        "tool_blocks_examined": len(events), "unknown_time_excluded": unknown_time,
+    }
+
+
+def _evidence_json(value: Dict) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
+
+
+def format_tool_evidence(
+    session_id: str, session_file: Path, source_hash: str, parsed: Dict,
+    selected: Dict, *, source_labels: List[str], copy_paths: List[Path],
+    filters: Dict, max_output_bytes: Optional[int], subagent_path: Optional[str] = None,
+) -> str:
+    """Return one JSON envelope bounded in UTF-8 bytes, including its newline.
+
+    Emit complete pairs first. An oversized first pair may expose explicitly
+    incomplete serialized block prefixes; never present them as original blocks.
+    """
+    matches = selected["groups"]
+    payload = {
+        "kind": "claude_original_tool_evidence", "session_id": session_id,
+        "source": {
+            "path": str(session_file), "sha256": source_hash,
+            "bytes": parsed["file_size"], "physical_lines": parsed["total_lines"],
+            "sources": source_labels, "copies_checked": [str(path) for path in copy_paths],
+            "observed_session_ids": sorted(parsed["observed_session_ids"]),
+            "scope": ("selected subagent transcript only" if subagent_path else
+                      "selected main transcript, including its recorded sidechains"),
+            "subagent_files_read": 1 if subagent_path else 0,
+            **({"subagent_path": subagent_path} if subagent_path else {}),
+        },
+        "filters": filters,
+        "coverage": {
+            "tool_blocks_examined": selected["tool_blocks_examined"],
+            "groups_examined": selected["groups_examined"],
+            "unknown_time_excluded": selected["unknown_time_excluded"],
+            "matched_groups": len(matches), "returned_groups": 0,
+            "complete_groups": 0, "omitted_groups": len(matches),
+            "first_omitted_ordinal": matches[0]["ordinal"] if matches else None,
+            "output_complete": not matches, "max_output_bytes": max_output_bytes,
+        },
+        "pairs": [],
+    }
+
+    def update_coverage():
+        returned = len(payload["pairs"])
+        complete = sum(pair["payload_complete"] for pair in payload["pairs"])
+        payload["coverage"].update({
+            "returned_groups": returned, "complete_groups": complete,
+            "omitted_groups": len(matches) - returned,
+            "first_omitted_ordinal": matches[returned]["ordinal"] if returned < len(matches) else None,
+            "output_complete": complete == len(matches),
+        })
+
+    def fits():
+        return max_output_bytes is None or len(_evidence_json(payload).encode("utf-8")) <= max_output_bytes
+
+    if not fits():
+        raise SessionEvidenceError("tool-evidence metadata exceeds --max-output-bytes; raise the bound")
+    for pair in matches:
+        payload["pairs"].append(pair)
+        update_coverage()
+        if fits():
+            continue
+        payload["pairs"].pop()
+        update_coverage()
+        if payload["pairs"]:
+            break
+        # A partial group retains all coordinates and pairing status. Only the
+        # block payload becomes a labelled prefix of its serialized JSON.
+        partial = {**pair, "calls": [], "results": [], "payload_complete": False}
+        raw_blocks = []
+        for side in ("calls", "results"):
+            for event in pair[side]:
+                raw = json.dumps(event["block"], ensure_ascii=False)
+                item = {key: value for key, value in event.items() if key != "block"}
+                item.update({"block_json_prefix": "", "block_characters": len(raw), "block_complete": False})
+                partial[side].append(item)
+                raw_blocks.append((item, raw))
+        payload["pairs"].append(partial)
+        update_coverage()
+        if not fits():
+            payload["pairs"].pop()
+            update_coverage()
+            break
+        low, high = 0, max((len(raw) for _, raw in raw_blocks), default=0)
+        while low < high:
+            middle = (low + high + 1) // 2
+            for item, raw in raw_blocks:
+                item["block_json_prefix"] = raw[:middle]
+                item["block_complete"] = middle >= len(raw)
+            if fits():
+                low = middle
+            else:
+                high = middle - 1
+        for item, raw in raw_blocks:
+            item["block_json_prefix"] = raw[:low]
+            item["block_complete"] = low >= len(raw)
+        break
+    output = _evidence_json(payload)
+    if max_output_bytes is not None and len(output.encode("utf-8")) > max_output_bytes:
+        raise SessionEvidenceError("tool-evidence output exceeded its byte bound")
+    return output
+
+
+def _detect_end_reason(
+    last_role: Optional[str],
+    unresolved: Dict,
+    error_count: int,
+    tail_is_interrupt: bool = False,
+    last_assistant_has_text: bool = True,
+) -> str:
+    """Detect why the session ended."""
+    if tail_is_interrupt:
+        return "interrupted_explicit"  # Explicit esc marker as the last relevant record — outranks inference
+    if unresolved:
+        return "interrupted"  # Tool calls dispatched but no results — likely ctrl-c
+    if error_count >= 3:
+        return "error_cascade"  # Multiple API errors suggest systemic failure
+    if last_role == "assistant":
+        return "completed" if last_assistant_has_text else "abandoned"
+    if last_role == "user":
+        return "abandoned"  # User sent a message but got no response
+    return "unknown"
+
+
+def _is_noise_user_text(text: str) -> bool:
+    """Check if user text is system noise rather than a real request."""
+    for pattern in NOISE_USER_PATTERNS:
+        if text.startswith(pattern) or pattern in text[:200]:
+            return True
+    return False
+
+
+def extract_user_text(messages: List[Dict], limit: int = 5) -> List[str]:
+    """Extract the last N user text messages (not tool results or system noise).
+
+    Not called anywhere in this skill (public API surface kept, not retired).
+    The live path is ``_turn_kinds`` → ``extract_turn_timeline`` → briefing.
+    """
+    user_texts = []
+    for msg_obj in reversed(messages):
+        if msg_obj.get("isCompactSummary"):
+            continue
+        msg = msg_obj.get("message", {})
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content", "")
+        if is_local_command_record(content):
+            continue
+        if isinstance(content, str) and content.strip():
+            if _is_noise_user_text(content):
+                continue
+            user_texts.append(content.strip())
+        elif isinstance(content, list):
+            texts = [
+                b.get("text", "")
+                for b in content
+                if isinstance(b, dict) and b.get("type") == "text"
+            ]
+            combined = "\n".join(t for t in texts if t.strip())
+            if combined and not _is_noise_user_text(combined):
+                user_texts.append(combined)
+        if len(user_texts) >= limit:
+            break
+    user_texts.reverse()
+    return user_texts
+
+
+def extract_assistant_text(messages: List[Dict], limit: int = 3) -> List[str]:
+    """Extract the last N assistant text responses (no thinking/tool_use).
+
+    Not called anywhere in this skill (public API surface kept, not retired).
+    The live path is ``_turn_kinds`` → ``extract_turn_timeline`` → briefing,
+    which does emit thinking turns.
+    """
+    assistant_texts = []
+    for msg_obj in reversed(messages):
+        msg = msg_obj.get("message", {})
+        if msg.get("role") != "assistant":
+            continue
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            texts = [
+                b.get("text", "")
+                for b in content
+                if isinstance(b, dict) and b.get("type") == "text"
+            ]
+            combined = "\n".join(t for t in texts if t.strip())
+            if combined:
+                assistant_texts.append(combined[:2000])
+        if len(assistant_texts) >= limit:
+            break
+    assistant_texts.reverse()
+    return assistant_texts
+
+
+def _turn_kinds(msg_obj: Dict) -> List[tuple]:
+    """Yield (kind, text) turns for one record in physical block order.
+
+    Assistant records can carry thinking blocks: they are part of the same
+    chronology as prose (the skill's search contract already requires
+    thinking coverage), so a thinking-only record must not be silently
+    skipped. Thinking `signature` fields are never emitted — they create
+    false-positive search hits. Consecutive text blocks keep joining into one
+    turn (previous behavior); a thinking block flushes any buffered text
+    first so the two kinds never merge into one turn.
+    """
+    msg = msg_obj.get("message", {})
+    content = msg.get("content", "")
+    role = msg.get("role", "")
+    text_kind = "assistant_text" if role == "assistant" else "user"
+    if isinstance(content, str):
+        text = content.strip()
+        return [(text_kind, text)] if text else []
+    if not isinstance(content, list):
+        return []
+    turns, buf = [], []
+
+    def flush() -> None:
+        joined = "\n".join(buf).strip()
+        buf.clear()
+        if joined:
+            turns.append((text_kind, joined))
+
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        block_type = block.get("type")
+        if block_type == "text":
+            text = block.get("text", "")
+            if text.strip():
+                buf.append(text)
+        elif role == "assistant" and block_type == "thinking":
+            thinking = block.get("thinking", "")
+            if thinking.strip():
+                flush()
+                turns.append(("assistant_thinking", thinking.strip()))
+    flush()
+    return turns
+
+
+def extract_turn_timeline(messages: List[Dict]) -> List[Dict]:
+    """Return human/assistant text and assistant thinking turns in physical
+    record order."""
+    turns = []
+    for ordinal, msg_obj in enumerate(messages):
+        if msg_obj.get("isCompactSummary"):
+            # Claude-generated continuation context is evidence, but it is not a
+            # human request and must not be attributed as one in the chronology.
+            continue
+        msg = msg_obj.get("message", {})
+        role = msg.get("role")
+        if role not in ("user", "assistant"):
+            continue
+        is_local_runtime = role == "user" and is_local_command_record(
+            msg.get("content", "")
+        )
+        for kind, text in _turn_kinds(msg_obj):
+            if is_local_runtime:
+                # Keep the exact runtime payload and record coordinate, but do
+                # not attribute it to a person or reinterpret its contents.
+                kind = "local_runtime"
+            elif kind == "user" and "[Request interrupted by user" in text:
+                # Harness-written esc marker, not human prose — labeled apart
+                # from the user's own words (and deliberately NOT in
+                # NOISE_USER_PATTERNS: verbatim export keeps it, end-state
+                # triage reads it).
+                kind = "interrupt_marker"
+            if kind == "user" and _is_noise_user_text(text):
+                continue
+            turns.append(
+                {
+                    "ordinal": ordinal,
+                    "role": role,
+                    "kind": kind,
+                    "text": text,
+                    "queued": bool(msg_obj.get("_queued_human")),
+                }
+            )
+    return turns
+
+
+def _handoff_segments(timeline: List[Dict]) -> List[List[Dict]]:
+    """Retain every textual turn in physical record order.
+
+    First/latest assistant compression can erase the only proven asset or
+    successful route between two user messages. Character clipping already bounds
+    default output; ``--full`` removes that clipping without changing which turns
+    exist in the evidence receipt.
+    """
+    return [timeline] if timeline else []
+
+
+def _clip(text: str, limit: int, full: bool) -> str:
+    if full or len(text) <= limit:
+        return text
+    return text[:limit] + f"\n… (truncated at {limit}/{len(text)} chars — rerun with --full)"
+
+
+def _confirmed_skill_injections(messages: List[Dict]) -> Dict[int, str]:
+    """Locate display-only projections with an explicit Skill-call provenance.
+
+    A skill-looking heading or a user-role label is not authorship evidence.
+    Require runtime metadata, a unique matching Skill tool ID, and one text
+    payload. Mixed records, queued human prompts and unbound metadata stay visible.
+    """
+    calls: Dict[str, List[tuple]] = {}
+    for ordinal, record in enumerate(messages):
+        message = record.get("message", {})
+        content = message.get("content", "")
+        if message.get("role") != "assistant" or not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            tool_id, inputs = block.get("id"), block.get("input")
+            name = inputs.get("skill") if isinstance(inputs, dict) else None
+            if not isinstance(tool_id, str) or not tool_id:
+                continue
+            if (block.get("name") != "Skill" or not isinstance(name, str)
+                    or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]*", name)):
+                name = None
+            calls.setdefault(tool_id, []).append(
+                (ordinal, name, record.get("agentId"), record.get("isSidechain"))
+            )
+
+    injections = {}
+    for ordinal, record in enumerate(messages):
+        message = record.get("message", {})
+        if (message.get("role") != "user" or record.get("isMeta") is not True
+                or record.get("_queued_human")):
+            continue
+        source_id = record.get("sourceToolUseID")
+        matches = calls.get(source_id, []) if isinstance(source_id, str) else []
+        if len(matches) != 1:
+            continue
+        call_ordinal, name, agent, sidechain = matches[0]
+        if (not name or call_ordinal >= ordinal or agent != record.get("agentId")
+                or sidechain != record.get("isSidechain")):
+            continue
+        content = message.get("content", "")
+        if isinstance(content, list):
+            if (len(content) != 1 or not isinstance(content[0], dict)
+                    or content[0].get("type") != "text"):
+                continue
+            content = content[0].get("text")
+        if isinstance(content, str) and content.strip():
+            injections[ordinal] = name
+    return injections
+
+
+def _append_timeline(sections: List[str], messages: List[Dict], full: bool) -> None:
+    timeline = extract_turn_timeline(messages)
+    if not timeline:
+        return
+    sections.append("\n## Chronological Handoff Timeline\n")
+    sections.append(
+        "Every retained human and assistant turn — prose and thinking, kept as "
+        "separate records, never merged — is shown in physical record order. "
+        "Default mode clips long turns and folds confirmed runtime Skill bodies. "
+        "`--full` expands those bodies and removes clipping; original records "
+        "remain unchanged.\n"
+    )
+    skill_injections = _confirmed_skill_injections(messages)
+    for segment in _handoff_segments(timeline):
+        for turn in segment:
+            role = turn["role"].upper()
+            if turn.get("kind") == "assistant_thinking":
+                role = "ASSISTANT (thinking)"
+            elif turn.get("kind") == "interrupt_marker":
+                role = "USER (interrupt marker)"
+            elif turn.get("kind") == "local_runtime":
+                role = "LOCAL RUNTIME (output)"
+            skill_name = skill_injections.get(turn["ordinal"])
+            if skill_name:
+                role = "SKILL RUNTIME (injected body)"
+            queued = " · queued human input" if turn["queued"] else ""
+            sections.append(f"### Record {turn['ordinal']} · {role}{queued}\n")
+            if skill_name and not full:
+                sections.append(
+                    f"[Skill invoked: {skill_name}; injected body folded "
+                    f"({len(turn['text'])} chars). Rerun with --full to expand "
+                    f"Record {turn['ordinal']}.]\n"
+                )
+                continue
+            limit = 1000 if role == "USER" else 1600
+            sections.append(_clip(turn["text"], limit, full) + "\n")
+    # Local runtime records are chronology, not requests.  Find the last real
+    # human turn and only call it unanswered when no later assistant prose was
+    # retained; a local envelope after it cannot erase that state.
+    last_human_index = max(
+        (index for index, turn in enumerate(timeline)
+         if turn.get("kind") == "user" and turn["ordinal"] not in skill_injections),
+        default=None,
+    )
+    if last_human_index is not None and not any(
+        turn["kind"] == "assistant_text" for turn in timeline[last_human_index + 1 :]
+    ):
+        sections.append(
+            f"> **Unanswered retained request**: the evidence ends on record "
+            f"{timeline[last_human_index]['ordinal']}.\n"
+        )
+
+
+# ── Subagent extraction ──────────────────────────────────────────────
+
+
+def discover_subagent_files(session_file: Path) -> List[Path]:
+    """Enumerate only the selected Session's flat and Workflow leaf layouts.
+
+    Deliberately avoid recursive corpus scans and reject links escaping this
+    Session. A run-relative path, not an agent basename, identifies a leaf.
+    """
+    root = session_file.parent / session_file.stem / "subagents"
+    if not root.resolve().is_relative_to(session_file.parent.resolve() / session_file.stem):
+        raise SessionEvidenceError(f"subagent directory escapes selected Session: {root}")
+    candidates = sorted(root.glob("*.jsonl")) + sorted(root.glob("workflows/*/agent-*.jsonl"))
+    for path in candidates:
+        if not path.resolve().is_relative_to(root.resolve()):
+            raise SessionEvidenceError(f"subagent path escapes selected Session: {path}")
+    return candidates
+
+
+def select_subagent_file(session_file: Path, relative_path: str) -> Path:
+    """Resolve one exact run-relative leaf; never guess by agent ID."""
+    relative = Path(relative_path)
+    if (not relative_path or relative.is_absolute() or ".." in relative.parts
+            or relative.as_posix() != relative_path):
+        raise SessionEvidenceError("--subagent-path needs an exact relative JSONL leaf path")
+    root = session_file.parent / session_file.stem / "subagents"
+    matches = [path for path in discover_subagent_files(session_file)
+               if path.relative_to(root).as_posix() == relative_path]
+    if len(matches) != 1:
+        raise SessionEvidenceError("subagent leaf missing or ambiguous; use its full path relative to subagents, including workflows/<run>/ when present")
+    return matches[0]
+
+
+def extract_subagent_context(session_file: Path) -> List[Dict]:
+    """Extract subagent summaries from session subdirectories.
+
+    Returns list of {name, type, status, last_text, is_interrupted}.
+    """
+    results = []
+    root = session_file.parent / session_file.stem / "subagents"
+    for jsonl_file in discover_subagent_files(session_file):
+        agent_id = jsonl_file.relative_to(root).with_suffix("").as_posix()
+        meta_file = jsonl_file.with_suffix(".meta.json")
+
+        # Parse agent type from ID (format: agent-a<type>-<hash> or agent-a<hash>)
+        agent_type = "unknown"
+        if meta_file.exists():
+            try:
+                with open(meta_file, encoding="utf-8") as f:
+                    meta = json.load(f)
+                agent_type = meta.get("type", meta.get("subagent_type", "unknown"))
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        if agent_type == "unknown":
+            # Infer from ID pattern: agent-a<type>-<hash>
+            match = re.match(r'agent-a(compact|prompt_suggestion|[a-z_]+)-', jsonl_file.stem)
+            if match:
+                agent_type = match.group(1)
+
+        # Skip compact and prompt_suggestion agents (internal, not user work)
+        if agent_type in ("compact", "prompt_suggestion"):
+            continue
+
+        # Reuse the strict Session parser and order-independent pending-call
+        # accounting. Malformed or foreign leaves are unknown, never completed.
+        last_text = ""
+        line_count = 0
+        error = None
+        is_interrupted = False
+        try:
+            source_hash = _file_digest(jsonl_file)
+            parsed = parse_session_structure(jsonl_file)
+            validate_selected_session_identity(parsed["observed_session_ids"], session_file.stem)
+            if _file_digest(jsonl_file) != source_hash:
+                raise SessionEvidenceError("subagent transcript changed during the read")
+            line_count = parsed["total_lines"]
+            is_interrupted = bool(parsed["unresolved_tool_calls"])
+            for record in reversed(parsed["messages"]):
+                message = record.get("message", {})
+                if message.get("role") != "assistant":
+                    continue
+                content = message.get("content", [])
+                if isinstance(content, str):
+                    last_text = content.strip()[:500]
+                elif isinstance(content, list):
+                    last_text = "\n".join(block.get("text", "") for block in content
+                                          if isinstance(block, dict) and block.get("type") == "text").strip()[:500]
+                if last_text:
+                    break
+        except (SessionEvidenceError, OSError, UnicodeError) as exc:
+            error = str(exc)
+        results.append({
+            "id": agent_id, "path": str(jsonl_file), "type": agent_type,
+            "last_text": last_text, "is_interrupted": is_interrupted,
+            "lines": line_count, "coverage_error": error,
+        })
+
+    return results
+
+
+def command_sha256(command: str) -> str:
+    """Digest a tool call's ``command`` the way hook audit logs key it.
+
+    Hook logs that avoid storing command text (for example a Bash guard's
+    ``sid=<session> cmd_sha256=<hex>`` audit row) hash ``tool_input.command``
+    as UTF-8. ``surrogatepass`` keeps a lone surrogate from a JSON ``\\ud800``
+    escape hashable instead of raising.
+    """
+    return hashlib.sha256(command.encode("utf-8", "surrogatepass")).hexdigest()
+
+
+def find_tool_uses_by_command_sha256(session_file: Path, digest: str) -> Dict:
+    """Find the tool calls in one Session whose ``input.command`` hashes to ``digest``.
+
+    A hook event made inside a subagent carries the parent Session ID, so the
+    matching record can live in ``<session>/subagents/*.jsonl`` and ``subagents/workflows/<run>/agent-*.jsonl`` rather than the
+    main transcript; both are searched. Returns the examined files, how many
+    tool calls carried a string ``command``, unparseable line counts, the main
+    transcript's record-level Session IDs, and every match in file order.
+    """
+    files = [session_file, *discover_subagent_files(session_file)]
+
+    examined = 0
+    unparseable: Dict[str, int] = {}
+    observed_ids: set[str] = set()
+    matches: List[Dict] = []
+    for path in files:
+        source_hash = _file_digest(path)
+        is_main = path == session_file
+        with path.open(encoding="utf-8", errors="surrogateescape") as handle:
+            for line_number, line in enumerate(handle, 1):
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    unparseable[str(path)] = unparseable.get(str(path), 0) + 1
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if isinstance(record.get("sessionId"), str) and record["sessionId"]:
+                    observed_ids.add(record["sessionId"])
+                if record.get("type") != "assistant":
+                    continue
+                message = record.get("message")
+                content = message.get("content") if isinstance(message, dict) else None
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if not isinstance(block, dict) or block.get("type") != "tool_use":
+                        continue
+                    if not isinstance(record.get("sessionId"), str) or not record["sessionId"]:
+                        raise SessionEvidenceError(f"tool block has no record-level Session identity in {path}:{line_number}")
+                    tool_input = block.get("input")
+                    command = (
+                        tool_input.get("command") if isinstance(tool_input, dict) else None
+                    )
+                    if not isinstance(command, str):
+                        continue
+                    examined += 1
+                    if command_sha256(command) != digest:
+                        continue
+                    matches.append({
+                        "path": path,
+                        "subagent": None if is_main else path.relative_to(session_file.parent / session_file.stem / "subagents").with_suffix("").as_posix(),
+                        "line": line_number,
+                        "timestamp": record.get("timestamp"),
+                        "uuid": record.get("uuid"),
+                        "cwd": record.get("cwd"),
+                        "tool": block.get("name"),
+                        "tool_use_id": block.get("id"),
+                        "command": command,
+                    })
+        if _file_digest(path) != source_hash:
+            raise SessionEvidenceError(f"transcript changed during the read: {path}")
+    return {
+        "files": files,
+        "examined": examined,
+        "unparseable": unparseable,
+        "observed_session_ids": observed_ids,
+        "matches": matches,
+    }
+
+
+def _fence_for(text: str) -> str:
+    """Return a backtick fence one run longer than the longest run inside ``text``.
+
+    A verbatim payload can itself contain a run of backticks (including a
+    triple-backtick code fence); a fixed ```` ``` ```` fence would close early
+    and truncate the printed output. This guarantees the fence cannot appear
+    inside the payload.
+    """
+    return "`" * max(3, max((len(run) for run in re.findall(r"`+", text)), default=0) + 1)
+
+
+def format_command_matches(session_id: str, digest: str, result: Dict) -> str:
+    """Render a command-hash lookup as Markdown with the full command text."""
+    subagent_files = len(result["files"]) - 1
+    lines = [
+        f"# Tool calls whose `command` has SHA-256 `{digest}`",
+        "",
+        f"- **Session**: `{session_id}`",
+        f"- **Examined**: {len(result['files'])} transcript file(s) "
+        f"(main + {subagent_files} subagent), {result['examined']} tool call(s) "
+        "with a string `command`",
+        f"- **Matches**: {len(result['matches'])}",
+    ]
+    for path, count in result["unparseable"].items():
+        lines.append(f"- **Unparseable lines skipped**: {count} in `{path}`")
+    if not result["matches"]:
+        lines += [
+            "",
+            "No tool call in this Session's main transcript or subagent transcripts "
+            "has this digest. The digest must be SHA-256 over the raw "
+            "`tool_input.command` string as UTF-8, and the Session ID must be the "
+            "one the hook event carried.",
+        ]
+        if result["unparseable"]:
+            lines.append(
+                "Some lines could not be parsed (listed above), so this does not "
+                "prove the call is absent."
+            )
+    for index, match in enumerate(result["matches"], 1):
+        where = f"subagent `{match['subagent']}`" if match["subagent"] else "main transcript"
+        fence = _fence_for(match["command"])
+        lines += [
+            "",
+            f"## Match {index} — {where}",
+            "",
+            f"- **File**: `{match['path']}` line {match['line']}",
+            f"- **Timestamp**: {match['timestamp'] or 'unknown'}",
+            f"- **Record uuid**: `{match['uuid'] or 'unknown'}`",
+            f"- **Tool**: {match['tool'] or 'unknown'} (tool_use id `{match['tool_use_id'] or 'unknown'}`)",
+            f"- **cwd**: `{match['cwd'] or 'unknown'}`",
+            "",
+            f"{fence}text",
+            match["command"],
+            fence,
+        ]
+    return "\n".join(lines)
+
+
+# Claude Code has shipped its subagent-dispatch tool under two names: `Task`
+# (older releases) and `Agent` (current). Both are searched so a lookup
+# works regardless of which release wrote the transcript.
+AGENT_TOOL_NAMES = ("Agent", "Task")
+
+
+def find_agent_prompts_in_session(
+    session_file: Path, description_prefix: Optional[str] = None
+) -> Dict:
+    """Find every Agent/Task tool_use in one Session, verbatim.
+
+    A review record must quote the prompt given to an independent reviewer
+    agent verbatim. Searches the main transcript and
+    ``<session>/subagents/*.jsonl`` and ``subagents/workflows/<run>/agent-*.jsonl`` (a subagent can itself dispatch another
+    agent). Returns the examined files, how many Agent/Task tool calls
+    carried a string ``prompt`` (before any ``description_prefix`` filter),
+    unparseable line counts, the main transcript's record-level Session IDs,
+    and every match in file order — including duplicates: the same prompt
+    dispatched twice is reported twice, not collapsed.
+    """
+    files = [session_file, *discover_subagent_files(session_file)]
+
+    examined = 0
+    unparseable: Dict[str, int] = {}
+    observed_ids: set[str] = set()
+    matches: List[Dict] = []
+    for path in files:
+        source_hash = _file_digest(path)
+        is_main = path == session_file
+        with path.open(encoding="utf-8", errors="surrogateescape") as handle:
+            for line_number, line in enumerate(handle, 1):
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    unparseable[str(path)] = unparseable.get(str(path), 0) + 1
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if isinstance(record.get("sessionId"), str) and record["sessionId"]:
+                    observed_ids.add(record["sessionId"])
+                if record.get("type") != "assistant":
+                    continue
+                message = record.get("message")
+                content = message.get("content") if isinstance(message, dict) else None
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if not isinstance(block, dict) or block.get("type") != "tool_use":
+                        continue
+                    if block.get("name") not in AGENT_TOOL_NAMES:
+                        continue
+                    if not isinstance(record.get("sessionId"), str) or not record["sessionId"]:
+                        raise SessionEvidenceError(f"tool block has no record-level Session identity in {path}:{line_number}")
+                    tool_input = block.get("input")
+                    prompt = (
+                        tool_input.get("prompt") if isinstance(tool_input, dict) else None
+                    )
+                    if not isinstance(prompt, str):
+                        continue
+                    examined += 1
+                    description = (
+                        tool_input.get("description") if isinstance(tool_input, dict) else None
+                    )
+                    if description_prefix is not None and not (
+                        isinstance(description, str) and description.startswith(description_prefix)
+                    ):
+                        continue
+                    matches.append({
+                        "path": path,
+                        "subagent": None if is_main else path.relative_to(session_file.parent / session_file.stem / "subagents").with_suffix("").as_posix(),
+                        "line": line_number,
+                        "timestamp": record.get("timestamp"),
+                        "uuid": record.get("uuid"),
+                        "tool": block.get("name"),
+                        "tool_use_id": block.get("id"),
+                        "description": description,
+                        "subagent_type": tool_input.get("subagent_type"),
+                        "model": tool_input.get("model"),
+                        "run_in_background": tool_input.get("run_in_background"),
+                        "prompt": prompt,
+                    })
+        if _file_digest(path) != source_hash:
+            raise SessionEvidenceError(f"transcript changed during the read: {path}")
+    return {
+        "files": files,
+        "examined": examined,
+        "unparseable": unparseable,
+        "observed_session_ids": observed_ids,
+        "matches": matches,
+    }
+
+
+def format_agent_prompts(
+    session_id: str, result: Dict, description_prefix: Optional[str]
+) -> str:
+    """Render an Agent/Task prompt lookup as Markdown with each prompt verbatim."""
+    subagent_files = len(result["files"]) - 1
+    lines = [
+        f"# Agent/Task prompts in session `{session_id}`",
+        "",
+        f"- **Session**: `{session_id}`",
+        f"- **Examined**: {len(result['files'])} transcript file(s) "
+        f"(main + {subagent_files} subagent), {result['examined']} Agent/Task "
+        "tool call(s) with a string `prompt`",
+    ]
+    if description_prefix is not None:
+        lines.append(f"- **Description prefix filter**: `{description_prefix}`")
+    lines.append(f"- **Matches**: {len(result['matches'])}")
+    for path, count in result["unparseable"].items():
+        lines.append(f"- **Unparseable lines skipped**: {count} in `{path}`")
+    if not result["matches"]:
+        no_match = (
+            "No Agent/Task tool call in this Session's main transcript or "
+            "subagent transcripts"
+        )
+        if description_prefix is not None:
+            no_match += f" has a description starting with `{description_prefix}`."
+        else:
+            no_match += "."
+        lines += ["", no_match]
+        if result["unparseable"]:
+            lines.append(
+                "Some lines could not be parsed (listed above), so this does not "
+                "prove the call is absent."
+            )
+    for index, match in enumerate(result["matches"], 1):
+        where = f"subagent `{match['subagent']}`" if match["subagent"] else "main transcript"
+        fence = _fence_for(match["prompt"])
+        lines += [
+            "",
+            f"## Match {index} — {where}",
+            "",
+            f"- **File**: `{match['path']}` line {match['line']}",
+            f"- **Timestamp**: {match['timestamp'] or 'unknown'}",
+            f"- **Record uuid**: `{match['uuid'] or 'unknown'}`",
+            f"- **Tool**: {match['tool']} (tool_use id `{match['tool_use_id'] or 'unknown'}`)",
+            f"- **Description**: {match['description'] if match['description'] is not None else 'unknown'}",
+            f"- **subagent_type**: {match['subagent_type'] if match['subagent_type'] is not None else 'unknown'}",
+            f"- **model**: {match['model'] if match['model'] is not None else 'unknown'}",
+            f"- **run_in_background**: {match['run_in_background'] if match['run_in_background'] is not None else 'unknown'}",
+            "",
+            f"{fence}text",
+            match["prompt"],
+            fence,
+        ]
+    return "\n".join(lines)
+
+
+# ── Context sources ──────────────────────────────────────────────────
+
+
+def get_git_state(project_path: str) -> str:
+    """Get current git status and recent log."""
+    parts = []
+    try:
+        branch = subprocess.run(
+            ["git", "branch", "--show-current"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, cwd=project_path, timeout=5,
+        )
+        if branch.stdout.strip():
+            parts.append(f"**Current branch**: `{branch.stdout.strip()}`")
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    try:
+        status = subprocess.run(
+            ["git", "status", "--short"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, cwd=project_path, timeout=10,
+        )
+        if status.stdout.strip():
+            parts.append(f"### git status\n```\n{status.stdout.strip()}\n```")
+        else:
+            parts.append("### git status\nClean working tree.")
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        parts.append("### git status\n(unavailable)")
+
+    try:
+        log = subprocess.run(
+            ["git", "log", "--oneline", "-5"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, cwd=project_path, timeout=10,
+        )
+        if log.stdout.strip():
+            parts.append(f"### git log (last 5)\n```\n{log.stdout.strip()}\n```")
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    return "\n\n".join(parts)
+
+
+def get_memory_md(project_dir: Path) -> Optional[str]:
+    """Read MEMORY.md if it exists in the project's memory directory."""
+    memory_dir = project_dir / "memory"
+    memory_file = memory_dir / "MEMORY.md"
+    if memory_file.exists():
+        content = memory_file.read_text(encoding="utf-8").strip()
+        if content:
+            return content[:3000]
+    return None
+
+
+def get_session_memory(session_file: Path) -> Optional[str]:
+    """Read session-memory/summary.md if it exists (newer CC versions)."""
+    session_dir = session_file.parent / session_file.stem
+    summary = session_dir / "session-memory" / "summary.md"
+    if summary.exists():
+        content = summary.read_text(encoding="utf-8").strip()
+        if content:
+            return content[:3000]
+    return None
+
+
+# ── Output formatting ────────────────────────────────────────────────
+
+
+END_REASON_LABELS = {
+    "completed": "Clean exit (assistant completed response)",
+    "interrupted_explicit": "Interrupted by user (esc marker is the last relevant record)",
+    "interrupted": "Interrupted (unresolved tool calls — likely ctrl-c or timeout)",
+    "error_cascade": "Error cascade (multiple API errors)",
+    "abandoned": "Abandoned (user message with no response)",
+    "unknown": "Unknown",
+}
+
+
+def build_briefing(
+    session_entry: Optional[Dict],
+    parsed: Dict,
+    project_path: str,
+    project_dir: Path,
+    session_file: Path,
+    full: bool = False,
+) -> str:
+    """Build the structured Markdown briefing."""
+    sections = []
+
+    # Header
+    sections.append("# Claude Code Session Evidence Briefing\n")
+
+    # Session metadata
+    if session_entry:
+        sid = session_entry.get("sessionId", "?")
+        modified = session_entry.get("modified", "?")
+        branch = session_entry.get("gitBranch", "?")
+        msg_count = session_entry.get("messageCount", "?")
+        first_prompt = session_entry.get("firstPrompt", "")
+        summary = session_entry.get("summary", "")
+
+        sections.append("## Session Info\n")
+        sections.append(f"- **ID**: `{sid}`")
+        sections.append(f"- **Last active**: {modified}")
+        sections.append(f"- **Branch**: `{branch}`")
+        sections.append(f"- **Messages**: {msg_count}")
+        sections.append(f"- **First prompt**: {first_prompt}")
+        if summary:
+            sections.append(f"- **Summary**: {summary[:300]}")
+    elif parsed.get("selected_session_id"):
+        sections.append("## Session Info\n")
+        sections.append(f"- **ID**: `{parsed['selected_session_id']}`")
+
+    source_labels = parsed.get("source_labels") or []
+    copy_paths = parsed.get("copy_paths") or []
+    if source_labels:
+        sections.append(f"- **Sources read**: {', '.join(source_labels)}")
+    if copy_paths:
+        sections.append(f"- **Physical copies checked**: {len(copy_paths)}")
+
+    # File stats + end reason
+    file_mb = parsed["file_size"] / 1_000_000
+    end_label = END_REASON_LABELS.get(parsed["end_reason"], parsed["end_reason"])
+    sections.append(f"\n**Session file**: {file_mb:.1f} MB, {parsed['total_lines']} lines, "
+                    f"{len(parsed['compact_boundaries'])} compaction(s)")
+    sections.append(f"**Session end reason**: {end_label}")
+    observed_ids = sorted(parsed.get("observed_session_ids") or [])
+    if observed_ids:
+        sections.append(f"**Observed Session identity**: `{', '.join(observed_ids)}`")
+    else:
+        sections.append("**Observed Session identity**: unavailable in parsed records")
+    sections.append("**Chronology coverage**: every physical JSONL record")
+    if parsed["error_count"] > 0:
+        sections.append(f"**API errors**: {parsed['error_count']}")
+    cwd_provenance = parsed.get("cwd_provenance")
+    if cwd_provenance:
+        original = cwd_provenance.get("original_cwd") or "(unknown)"
+        last = cwd_provenance.get("last_runtime_cwd") or "(unknown)"
+        original_line = cwd_provenance.get("original_cwd_line") or "unknown"
+        last_line = cwd_provenance.get("last_runtime_cwd_line") or "unknown"
+        sections.append(
+            f"**Original cwd**: `{original}` (line {original_line}); "
+            f"**last runtime cwd**: `{last}` (line {last_line})"
+        )
+
+    # Session memory (newer CC versions generate this automatically)
+    session_mem = get_session_memory(session_file)
+    if session_mem:
+        sections.append("\n## Session Memory (auto-generated by Claude Code)\n")
+        sections.append(session_mem)
+
+    # Compact summary (highest-signal context)
+    if parsed["compact_boundaries"]:
+        last_summary = parsed["compact_boundaries"][-1][1]
+        if last_summary:
+            sections.append("\n## Compact Summary (auto-generated by previous session)\n")
+            sections.append(_clip(last_summary, 8000, full))
+
+    # Plan bindings (plan_mode / plan_file_reference attachments)
+    if parsed.get("plan_bindings"):
+        sections.append("\n## Plan Bindings\n")
+        for binding in parsed["plan_bindings"]:
+            recovery = (
+                "full plan content attached — recoverable even if the file is deleted"
+                if binding["has_content"]
+                else (
+                    f"path only (planExists={binding['plan_exists']}); content unavailable if the file is gone"
+                )
+            )
+            sections.append(
+                f"- `{binding['plan_file_path']}` — {binding['kind']}; {recovery}"
+            )
+        sections.append(
+            "Reverse lookup (plan file → owning session): "
+            "`analyze_sessions.py plan-bindings <absolute plan path>`\n"
+        )
+
+    _append_timeline(sections, parsed["messages"], full)
+
+    # Errors encountered
+    if parsed["errors"]:
+        sections.append("\n## Errors Encountered\n")
+        seen = set()
+        for err in parsed["errors"]:
+            short = err[:200]
+            if short not in seen:
+                seen.add(short)
+                sections.append(f"```\n{err}\n```\n")
+
+    # Unresolved tool calls (interrupted session)
+    if parsed["unresolved_tool_calls"]:
+        sections.append("\n## Unresolved Tool Calls (session was interrupted)\n")
+        for tool_id, info in parsed["unresolved_tool_calls"].items():
+            sections.append(f"- **{info['name']}**: `{tool_id}`")
+            sections.append(f"  Input: {info['input_preview']}")
+
+    # Subagent context (the "nobody has done this" feature)
+    subagents = extract_subagent_context(session_file)
+    if subagents:
+        interrupted = [s for s in subagents if s["is_interrupted"]]
+        completed = [s for s in subagents if not s["is_interrupted"] and not s.get("coverage_error")]
+        unknown = [s for s in subagents if s.get("coverage_error")]
+        sections.append(f"\n## Subagent Workflow ({len(completed)} completed, {len(interrupted)} interrupted)\n")
+        if unknown:
+            sections.append("### Subagents with unknown coverage\n")
+            for sa in unknown:
+                sections.append(f"- `{sa['id']}`: {sa['coverage_error']}")
+        if interrupted:
+            sections.append("### Interrupted Subagents\n")
+            for sa in interrupted:
+                sections.append(f"- **{sa['type']}** (`{sa['id']}`, {sa['lines']} lines)")
+                if sa["last_text"]:
+                    sections.append(f"  Last output: {sa['last_text'][:300]}")
+        if completed:
+            sections.append("\n### Completed Subagents\n")
+            for sa in completed:
+                sections.append(f"- **{sa['type']}** (`{sa['id']}`, {sa['lines']} lines)")
+                if sa["last_text"]:
+                    sections.append(f"  Last output: {sa['last_text'][:200]}")
+
+    # Files touched in session
+    if parsed["files_touched"]:
+        sections.append("\n## Files Touched in Session\n")
+        for fp in sorted(parsed["files_touched"])[:30]:
+            sections.append(f"- `{fp}`")
+
+    # MEMORY.md
+    memory = get_memory_md(project_dir)
+    if memory:
+        sections.append("\n## Persistent Memory (MEMORY.md)\n")
+        sections.append(memory)
+
+    # Git state
+    sections.append("\n## Current Workspace State\n")
+    sections.append(get_git_state(project_path))
+
+    return "\n".join(sections)
+
+
+# ── CLI ──────────────────────────────────────────────────────────────
+
+
+def _check_session_files(entries: List[Dict], project_dir: Path) -> Dict[str, bool]:
+    """Check which index entries have actual files on disk."""
+    status = {}
+    for entry in entries:
+        sid = entry.get("sessionId", "")
+        session_file = project_dir / f"{sid}.jsonl"
+        if session_file.exists():
+            status[sid] = True
+        else:
+            full_path = entry.get("fullPath", "")
+            status[sid] = bool(full_path and Path(full_path).exists())
+    return status
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Read chronological evidence from Claude Code sessions.",
+    )
+    parser.add_argument(
+        "--project", "-p",
+        default=None,
+        help=(
+            "Project path (default: current directory; with an exact --session, "
+            "omitting this flag searches all projects)"
+        ),
+    )
+    parser.add_argument(
+        "--session", "-s",
+        default=None,
+        help="Session ID to extract context from",
+    )
+    parser.add_argument(
+        "--query", "-q",
+        default=None,
+        help="Search sessions by keyword in firstPrompt/summary",
+    )
+    parser.add_argument(
+        "--list", "-l",
+        action="store_true",
+        help="List recent sessions",
+    )
+    parser.add_argument(
+        "--limit", "-n",
+        type=int,
+        default=10,
+        help="Number of sessions to list (default: 10)",
+    )
+    parser.add_argument(
+        "--exclude-current",
+        default=None,
+        help="Session ID to exclude (typically the currently active session)",
+    )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Expand confirmed Skill bodies and do not clip summary or timeline text",
+    )
+    parser.add_argument(
+        "--history-sources",
+        metavar="FILE",
+        help=(
+            "History source registry (default: ~/.claude/history-sources.json "
+            "when present)"
+        ),
+    )
+    parser.add_argument(
+        "--find-command-sha256",
+        metavar="HEX",
+        help=(
+            "With --session: print the full tool call(s) whose input.command has "
+            "this SHA-256 (the cmd_sha256 a hook audit log records), searching "
+            "the main transcript and its subagents; exit 1 when none match"
+        ),
+    )
+    parser.add_argument(
+        "--agent-prompts",
+        action="store_true",
+        help=(
+            "With --session: print every Agent/Task tool_use (Claude Code's "
+            "subagent-dispatch tool; Task in older releases) verbatim — "
+            "timestamp, record uuid, description, subagent_type, model, "
+            "run_in_background, and the prompt — searching the main "
+            "transcript and its subagents; exit 1 when none match"
+        ),
+    )
+    parser.add_argument(
+        "--agent-description-prefix",
+        metavar="TEXT",
+        default=None,
+        help="With --agent-prompts: only print calls whose description "
+        "starts with TEXT",
+    )
+    parser.add_argument("--tool-evidence", "--tools", action="store_true",
+                        help="With exact --session: JSON original tool call/result pairs only")
+    parser.add_argument("--subagent-path", metavar="RELATIVE_JSONL",
+                        help="With --tool-evidence: one exact leaf relative to this Session's subagents/ (flat or workflows/<run>/agent-*.jsonl); default main only")
+    parser.add_argument("--tool", action="append", default=[], metavar="NAME",
+                        help="With --tool-evidence: exact tool name; repeat for alternatives")
+    parser.add_argument("--contains", action="append", default=[], metavar="TEXT",
+                        help="With --tool-evidence: case-sensitive literal in call/result values; repeat for AND")
+    parser.add_argument("--ordinal", metavar="N[:M]",
+                        help="With --tool-evidence: 1-based pair/group ordinal or inclusive range before filters")
+    parser.add_argument("--from", dest="from_time", metavar="ISO",
+                        help="With --tool-evidence: inclusive call time (or orphan result time)")
+    parser.add_argument("--to", dest="to_time", metavar="ISO",
+                        help="With --tool-evidence: inclusive end time; ISO timezone or local date")
+    parser.add_argument("--max-output-bytes", type=int, default=64000, metavar="N",
+                        help="Tool evidence UTF-8 JSON byte bound including newline (default: 64000; --full removes it)")
+    args = parser.parse_args()
+    tool_filters = bool(args.tool or args.contains or args.ordinal or args.from_time or args.to_time)
+    if args.subagent_path is not None and not args.tool_evidence:
+        parser.error("--subagent-path needs --tool-evidence")
+    if args.subagent_path == "":
+        parser.error("--subagent-path cannot be empty")
+    if tool_filters and not args.tool_evidence:
+        parser.error("--tool/--contains/--ordinal/--from/--to need --tool-evidence")
+    ordinal_range = None
+    from_timestamp = to_timestamp = None
+    if args.tool_evidence:
+        if not args.session or args.query or args.list or args.find_command_sha256 or args.agent_prompts:
+            parser.error("--tool-evidence needs exact --session and no --query/--list/--find-command-sha256/--agent-prompts")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", args.session):
+            parser.error("--tool-evidence needs a Session ID, not a file path")
+        if not tool_filters:
+            parser.error("--tool-evidence needs a --tool/--contains/--ordinal/--from/--to selector")
+        if any(not value for value in args.tool + args.contains):
+            parser.error("--tool and --contains cannot be empty")
+        if args.max_output_bytes < 1024:
+            parser.error("--max-output-bytes must be at least 1024")
+        if args.ordinal:
+            if not re.fullmatch(r"[1-9][0-9]*(?::[1-9][0-9]*)?", args.ordinal):
+                parser.error("--ordinal takes a positive N or inclusive N:M range")
+            values = [int(value) for value in args.ordinal.split(":")]
+            ordinal_range = (values[0], values[-1])
+            if ordinal_range[0] > ordinal_range[1]:
+                parser.error("--ordinal range start must not exceed end")
+        try:
+            if args.from_time:
+                from_timestamp = parse_date_boundary(args.from_time)
+            if args.to_time:
+                to_timestamp = parse_date_boundary(args.to_time, end=True)
+        except ValueError as error:
+            parser.error(str(error))
+        if from_timestamp is not None and to_timestamp is not None and from_timestamp > to_timestamp:
+            parser.error("--from must not be after --to")
+    if args.find_command_sha256 is not None:
+        if not args.session or args.query or args.list:
+            parser.error("--find-command-sha256 needs --session and no --query/--list")
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", args.find_command_sha256):
+            parser.error("--find-command-sha256 takes a 64-character hex SHA-256 digest")
+        args.find_command_sha256 = args.find_command_sha256.lower()
+    if args.agent_description_prefix is not None and not args.agent_prompts:
+        parser.error("--agent-description-prefix needs --agent-prompts")
+    if args.agent_prompts:
+        if not args.session or args.query or args.list or args.find_command_sha256:
+            parser.error(
+                "--agent-prompts needs --session and no "
+                "--query/--list/--find-command-sha256"
+            )
+
+    project_path = os.path.abspath(args.project or os.getcwd())
+    global_exact_session = bool(
+        args.session and args.project is None and not args.query and not args.list
+    )
+    try:
+        if global_exact_session:
+            session_refs, source_warnings = discover_exact_session_refs(
+                args.session, args.history_sources, canonical_only=args.tool_evidence
+            )
+        else:
+            session_refs, source_warnings = discover_session_refs(
+                project_path, args.history_sources
+            )
+    except HistorySourceConfigError as error:
+        print(f"History source configuration error: {error}", file=sys.stderr)
+        sys.exit(2)
+    for warning in source_warnings:
+        print(f"History source warning: {warning}", file=sys.stderr)
+    if args.exclude_current:
+        session_refs = [
+            ref for ref in session_refs
+            if ref.get("session_id") != args.exclude_current
+        ]
+
+    if not session_refs:
+        if global_exact_session:
+            print(f"Error: session file not found for {args.session}", file=sys.stderr)
+        else:
+            print(
+                f"Error: no Claude session data found for {project_path}",
+                file=sys.stderr,
+            )
+        print(
+            "Looked across active Claude homes and every registered archive.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # ── List mode ──
+    if args.list:
+        print(f"Sessions for {project_path}:\n")
+        for ref in session_refs[:args.limit]:
+            labels = ", ".join(
+                source.display_label for source in ref.get("sources", [])
+            ) or "unknown source"
+            print(f"  {ref.get('session_id', '?')}  [{labels}]")
+            print(f"    {ref.get('path')}")
+            print()
+
+        sys.exit(0)
+
+    # ── Query mode ──
+    selected_ref = None
+    expected_session_id = None
+    if args.query:
+        needle = args.query.casefold()
+        matching_ids: set[str] = set()
+        for ref in session_refs:
+            for copy in ref.get("copies") or [{"path": ref["path"]}]:
+                for entry in load_sessions_index(Path(copy["path"]).parent):
+                    if entry.get("sessionId") != ref.get("session_id"):
+                        continue
+                    first_prompt = str(entry.get("firstPrompt") or "").casefold()
+                    summary = str(entry.get("summary") or "").casefold()
+                    if needle in first_prompt or needle in summary:
+                        matching_ids.add(ref["session_id"])
+        results = [ref for ref in session_refs if ref["session_id"] in matching_ids]
+        if not results:
+            print(f"No sessions matching '{args.query}'.", file=sys.stderr)
+            sys.exit(1)
+        print(f"Sessions matching '{args.query}' ({len(results)} found):\n")
+        for ref in results[: args.limit]:
+            print(f"  {ref['session_id']}\n    {ref['path']}")
+            print()
+        if len(results) == 1:
+            selected_ref = results[0]
+            expected_session_id = selected_ref["session_id"]
+        else:
+            sys.exit(0)
+
+    # ── Extract mode ──
+    if selected_ref is None and args.session:
+        exact = [ref for ref in session_refs if ref["session_id"] == args.session]
+        if exact:
+            selected_ref = exact[0]
+            expected_session_id = args.session
+        else:
+            # A fused file can end with a foreign internal Session ID, causing
+            # metadata discovery to index it under the wrong identity. The exact
+            # filename is still a candidate worth parsing so the identity gate can
+            # report the fusion instead of disguising it as "not found."
+            filename_matches = [
+                ref
+                for ref in session_refs
+                if any(
+                    Path(copy["path"]).stem == args.session
+                    for copy in ref.get("copies") or [{"path": ref["path"]}]
+                )
+            ]
+            if len(filename_matches) == 1:
+                selected_ref = filename_matches[0]
+                expected_session_id = args.session
+            elif len(filename_matches) > 1:
+                print(
+                    f"Error: exact Session filename {args.session!r} resolves to "
+                    "multiple evidence groups.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            matches = [
+                ref for ref in session_refs if args.session in ref["session_id"]
+            ]
+            if selected_ref is not None:
+                pass
+            elif len(matches) == 1:
+                selected_ref = matches[0]
+                expected_session_id = selected_ref["session_id"]
+            elif len(matches) > 1:
+                print(
+                    f"Error: session id fragment {args.session!r} is ambiguous; "
+                    "pass the full Session ID.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            else:
+                print(f"Error: session file not found for {args.session}", file=sys.stderr)
+                sys.exit(1)
+    if selected_ref is None:
+        selected_ref = session_refs[0]
+        expected_session_id = selected_ref["session_id"]
+
+    session_id = expected_session_id or selected_ref["session_id"]
+    if args.tool_evidence and session_id != args.session:
+        print("Error: --tool-evidence requires the full exact Session ID", file=sys.stderr)
+        sys.exit(1)
+    try:
+        session_file, source_labels, copy_paths = select_session_copy(selected_ref)
+    except SessionEvidenceError as error:
+        print(f"Error: cannot recover complete Claude Session evidence: {error}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.tool_evidence:
+        try:
+            if args.subagent_path is not None:
+                leaf = select_subagent_file(session_file, args.subagent_path)
+                leaf_copies = []
+                for parent_copy in copy_paths:
+                    candidate = parent_copy.parent / parent_copy.stem / "subagents" / args.subagent_path
+                    if candidate.exists():
+                        leaf_copies.append({"path": select_subagent_file(parent_copy, args.subagent_path)})
+                session_file, _, copy_paths = select_session_copy({"path": leaf, "copies": leaf_copies})
+            source_hash = _file_digest(session_file)
+            parsed = parse_session_structure(session_file, collect_tool_evidence=True)
+            validate_selected_session_identity(parsed["observed_session_ids"], session_id)
+            if args.subagent_path is not None:
+                expected_agent = session_file.stem.removeprefix("agent-")
+                for event in parsed["tool_events"]:
+                    if event["agent_id"] not in (expected_agent, session_file.stem):
+                        raise SessionEvidenceError("selected subagent tool block has missing or mismatched agent identity")
+            if _file_digest(session_file) != source_hash:
+                raise SessionEvidenceError("selected transcript changed during the read; retry the read")
+            selected = select_tool_evidence(
+                parsed["tool_events"], tools=args.tool, contains=args.contains,
+                ordinal=ordinal_range, from_timestamp=from_timestamp, to_timestamp=to_timestamp,
+            )
+            output = format_tool_evidence(
+                session_id, session_file, source_hash, parsed, selected,
+                source_labels=source_labels, copy_paths=copy_paths,
+                filters={"tools": args.tool, "contains": args.contains, "ordinal": ordinal_range,
+                         "from": args.from_time, "to": args.to_time},
+                max_output_bytes=None if args.full else args.max_output_bytes,
+                subagent_path=args.subagent_path,
+            )
+        except (SessionEvidenceError, OSError, UnicodeError) as error:
+            print(f"Error: cannot read original Claude tool evidence: {error}", file=sys.stderr)
+            sys.exit(1)
+        sys.stdout.write(output)
+        sys.exit(0 if selected["groups"] else 1)
+
+    if args.find_command_sha256:
+        try:
+            found = find_tool_uses_by_command_sha256(session_file, args.find_command_sha256)
+            validate_selected_session_identity(found["observed_session_ids"], session_id)
+        except (SessionEvidenceError, OSError) as error:
+            print(f"Error: cannot search Claude Session evidence: {error}", file=sys.stderr)
+            sys.exit(1)
+        print(format_command_matches(session_id, args.find_command_sha256, found))
+        sys.exit(0 if found["matches"] else 1)
+
+    if args.agent_prompts:
+        try:
+            found = find_agent_prompts_in_session(session_file, args.agent_description_prefix)
+            validate_selected_session_identity(found["observed_session_ids"], session_id)
+        except (SessionEvidenceError, OSError) as error:
+            print(f"Error: cannot search Claude Session evidence: {error}", file=sys.stderr)
+            sys.exit(1)
+        print(format_agent_prompts(session_id, found, args.agent_description_prefix))
+        sys.exit(0 if found["matches"] else 1)
+
+    project_dir = session_file.parent
+    entries = load_sessions_index(project_dir)
+    session_entry = next(
+        (entry for entry in entries if entry.get("sessionId") == session_id),
+        None,
+    )
+
+    # Parse and build briefing
+    print(f"Reading session {session_id} ({session_file.stat().st_size / 1_000_000:.1f} MB)...",
+          file=sys.stderr)
+
+    try:
+        parsed = parse_session_structure(session_file)
+        validate_selected_session_identity(
+            parsed.get("observed_session_ids") or set(), session_id
+        )
+    except (SessionEvidenceError, OSError, UnicodeError) as error:
+        print(
+            f"Error: cannot recover complete Claude Session evidence: {error}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    parsed["selected_session_id"] = session_id
+    parsed["source_labels"] = source_labels
+    parsed["copy_paths"] = copy_paths
+    cwd_summary = scan_claude_session(session_file)
+    parsed["cwd_provenance"] = {
+        "original_cwd": cwd_summary.original_cwd or None,
+        "original_cwd_line": cwd_summary.original_cwd_line,
+        "last_runtime_cwd": cwd_summary.last_runtime_cwd or None,
+        "last_runtime_cwd_line": cwd_summary.last_runtime_cwd_line,
+    }
+    if global_exact_session:
+        # The caller may be standing in an unrelated repository. Bind the
+        # workspace-state readback to the selected Session's own recorded cwd;
+        # an explicit --project remains the caller's intentional scope.
+        selected_cwd = cwd_summary.cwd
+        if selected_cwd:
+            project_path = os.path.abspath(selected_cwd)
+    briefing = build_briefing(
+        session_entry,
+        parsed,
+        project_path,
+        project_dir,
+        session_file,
+        full=args.full,
+    )
+
+    print(briefing)
+
+
+if __name__ == "__main__":
+    main()

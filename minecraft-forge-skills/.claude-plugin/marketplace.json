@@ -1,0 +1,26 @@
+{
+  "name": "mrquentin",
+  "owner": {
+    "name": "mrquentin"
+  },
+  "metadata": {
+    "description": "mrquentin's Claude Code plugin marketplace.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "minecraft-skills",
+      "source": "./",
+      "description": "Minecraft modding skills for Claude Code — Forge, NeoForge, GregTech Modern addon dev, NeoGradle build setup, and Bedrock GameTest framework.",
+      "version": "1.0.0",
+      "author": {
+        "name": "mrquentin",
+        "url": "https://github.com/mrquentin"
+      },
+      "homepage": "https://github.com/mrquentin/minecraft-skills",
+      "repository": "https://github.com/mrquentin/minecraft-skills",
+      "license": "MIT",
+      "keywords": ["minecraft", "modding", "forge", "neoforge", "gregtech", "gradle", "gametest"]
+    }
+  ]
+}
