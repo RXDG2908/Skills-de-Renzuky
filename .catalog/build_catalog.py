@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import glob, os, re, io
 
-BASE = "D:/Skills"
+ROOT = "D:/Skills"
+BASE = ROOT + "/skills"
 
 def read(p):
     return io.open(p, encoding="utf-8", errors="replace").read()
@@ -45,7 +46,7 @@ def clean(s, n=240):
     return s
 
 def entry(name, desc, path, tags=""):
-    rel = path.replace("\\", "/").replace(BASE + "/", "")
+    rel = path.replace("\\", "/").replace(ROOT + "/", "")
     line = f"- **{name}** — {desc}"
     if tags:
         line += f"  _[{tags}]_"
@@ -56,7 +57,8 @@ out = []
 out.append("# D:\\Skills — Catálogo plano\n")
 out.append("Índice de una línea por skill / design-system / template. Búscalo con Ctrl-F por palabra clave, "
            "luego abre el `SKILL.md` / `DESIGN.md` de la ruta indicada.\n")
-out.append("Generado por `scratchpad/build_catalog.py`. Regenerar al añadir repos.\n")
+out.append("Generado por `.catalog/build_catalog.py`. Regenerar al añadir repos. Las skills viven en `skills/`; "
+           "las herramientas (solo enlaces) en `tools/tools.json`.\n")
 
 def section(title, hint):
     out.append(f"\n## {title}\n")
@@ -517,7 +519,7 @@ for name, desc, folder in [
     ("packbox-studio", "PackBox Studio (sbarrak, MIT): app local de empaques — dieline paramétrica, editor de arte, preview 3D del plegado. Electron/Vite, requiere Node.", "packbox"),
     ("packaging-dieline-generator", "Generador offline de dielines de cajas (NealZhouPanda, MIT): medidas + grosor de cartón → SVG 1:1 mm o PDF. Un solo HTML (release/), sin instalar.", "packaging-dieline-generator"),
 ]:
-    rows.append(entry(name, desc, f"{BASE}/{folder}", "tool"))
+    rows.append(entry(name, desc, f"{ROOT}/tools/tools.json", "tool"))
 total += len(rows); out.append("\n".join(rows) + "\n")
 
 # 44. texturas HD / PBR / materiales [batch 2026-10-29]
@@ -529,7 +531,7 @@ for f in [f"{BASE}/loom/SKILL.md"] + sorted(glob.glob(f"{BASE}/shader-skills/ski
     name = fm.get("name", os.path.basename(os.path.dirname(f)))
     grp = f.replace("\\", "/").replace(BASE + "/", "").split("/")[0]
     rows.append(entry(name, clean(fm.get("description",""), 220), os.path.dirname(f), grp))
-rows.append(entry("materialize", "Materialize (Bounding Box Software, GPL-3.0): foto → material PBR (height, normal, metallic, smoothness, edge, AO) con preview en vivo; para replicar materiales reales. La carpeta es el proyecto Unity (fuente); para usarlo, descarga el build de Windows desde Releases del repo.", f"{BASE}/Materialize", "tool"))
+rows.append(entry("materialize", "Materialize (Bounding Box Software, GPL-3.0): foto → material PBR (height, normal, metallic, smoothness, edge, AO) con preview en vivo; para replicar materiales reales. La carpeta es el proyecto Unity (fuente); para usarlo, descarga el build de Windows desde Releases del repo.", f"{ROOT}/tools/tools.json", "tool"))
 total += len(rows); out.append("\n".join(rows) + "\n")
 
 # 45. metodología, oficiales, BD, modding, video [batch 2026-10-30]
@@ -556,8 +558,18 @@ for repo in ["superpowers", "karpathy-skills", "mattpocock-skills", "everything-
         rows.append(entry(name, clean(fm.get("description",""), 220), os.path.dirname(f), repo))
 total += len(rows); out.append("\n".join(rows) + "\n")
 
-out.insert(3, f"\n**Total: {total} entradas.**\n")
+# 46. voz, canto & lip-sync [batch 2026-11-10]
+section("Voz, canto & lip-sync (batch 2026-11-10)",
+        "tts-voice-bank (autorada): presets de TTS rápidos (edge-tts/kokoro/piper). lyric-swap-lipsync (autorada): cambiar lo que dice o canta un personaje con la misma voz y ritmo + lip-sync del video. Herramientas en tools/tools.json (categorías voz, separacion, edicion-habla, canto, lipsync).")
+rows = []
+for f in sorted(glob.glob(f"{BASE}/lyric-swap-lipsync/SKILL.md")) + sorted(glob.glob(f"{BASE}/tts-voice-bank/**/SKILL.md", recursive=True)):
+    fm = frontmatter(read(f))
+    rows.append(entry(fm.get("name", os.path.basename(os.path.dirname(f))), clean(fm.get("description",""), 260), os.path.dirname(f), "autorada"))
+rows.append(entry("tts-voice-bank", "Presets de TTS rápidos y guía de voces en español (edge-tts, kokoro, piper, espeak-ng): `voz.py` + benchmark. Las muestras de audio no se suben al repo.", f"{BASE}/tts-voice-bank", "autorada"))
+total += len(rows); out.append("\n".join(rows) + "\n")
 
-io.open(f"{BASE}/CATALOG.md", "w", encoding="utf-8").write("\n".join(out))
+out.insert(3,f"\n**Total: {total} entradas.**\n")
+
+io.open(f"{ROOT}/CATALOG.md", "w", encoding="utf-8").write("\n".join(out))
 print("wrote", total, "entries")
-print("size KB:", os.path.getsize(f"{BASE}/CATALOG.md") // 1024)
+print("size KB:", os.path.getsize(f"{ROOT}/CATALOG.md") // 1024)

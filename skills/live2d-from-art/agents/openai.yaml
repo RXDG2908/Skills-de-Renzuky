@@ -1,0 +1,4 @@
+interface:
+  display_name: "原画到 Live2D"
+  short_description: "复用保真拆图、代码建模、网页调试和自然待机的完整制作流程"
+  default_prompt: "使用 $live2d-from-art，把我的角色素材制作成可交互的 Live2D，并在网页上对照原图验证形象和动作。"

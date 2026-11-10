@@ -1,8 +1,0 @@
-{
-    "name": "redis-protobuf",
-    "license": "Apache-2.0",
-    "description": "Redis module for reading and writing Protobuf messages",
-    "github": [
-        "sewenew"
-    ]
-}

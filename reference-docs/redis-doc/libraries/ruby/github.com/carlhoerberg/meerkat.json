@@ -1,7 +1,0 @@
-{
-    "name": "Meerkat",
-    "description": "Rack middleware for Server Sent Events with multiple backends.",
-    "twitter": [
-        "carlhoerberg"
-    ]
-}

@@ -1,0 +1,280 @@
+---
+name: ghostty-use
+description: >-
+  Snapshots/restores Ghostty Claude Code/Codex tabs across reboots. Use before Mac updates
+  (保存终端会话/重启前备份终端), after restart to reopen original session IDs
+  (恢复之前的窗口/restore my ghostty tabs), audit survivors, or periodic change-only snapshots
+  (定期增量快照/没变化不记录). Also for unmanaged/legacy Codex account switches
+  (额度耗尽换号/换号后恢复全部 Codex); Minions native_runtime uses Account Manager.
+  Not for --resume, screenshots or tmux.
+---
+
+# ghostty-use
+
+Capture identifiable Claude Code and Codex terminal sessions before a reboot and
+reopen recorded IDs afterwards. Manual snapshots grade liveness; automatic backups
+store recovery metadata with explicit partial coverage and unknown liveness.
+
+## Ghostty interaction channel
+
+For computer-use observation or interaction with Ghostty, use **Kimi computer use**
+(`kimi-cu` / `mcp__kimi_cu__*`). **Never use Codex computer use** (`mcp__cua_repl`)
+for Ghostty, including screenshots, clicks, typing and tab/window management.
+Prefer Kimi for ad hoc interaction. The existing `osascript` / System Events batch
+restore helpers remain allowed under the foreground and reconciliation rules below.
+Snapshot, planning and read-only checks may continue through their existing scripts.
+If Kimi is unavailable, report that gap rather than substituting Codex computer use;
+use an existing script only when it supports the task and is already authorized.
+Never use either channel to bypass a host denial.
+
+Snapshot, reconstruction, dry-run and reconciliation can proceed without taking
+the desktop. Actual restore uses global keyboard/clipboard input and is foreground
+work even when launched as a background shell job. Apply the current user's
+foreground authorization. When it already covers this app and action, notify and
+proceed without requesting another handoff or requiring a lease or idle proof.
+Coordinate observed competing use. On human takeover, actual agent competition or
+externally overwritten state, stop input and yield; do not restore your old focus.
+If foreground use is not authorized, continue preparation and read-only checks
+until the missing bounded authorization is supplied. Host denials remain binding.
+
+## Entry decision tree
+
+For missing Codex terminals without confirmed Ghostty ownership, load the installed
+`read-codex-history` Skill and follow its
+[terminal-session recovery recipe](https://github.com/daymade/claude-code-skills/blob/main/daymade-claude-code/read-codex-history/references/terminal-session-recovery.md).
+
+| You just said / want | Run |
+|---|---|
+| Quitting for an update / reboot ("重启前保存会话") | `snapshot` |
+| Periodic backup, save only changes ("定期增量快照") | Read automatic-snapshots.md, then `ghostty_watch.py install --apply` |
+| Rebooted, want tabs back ("恢复之前的窗口") | Use a suitable snapshot; if absent or outdated, `reconstruct`, then `restore --all` on the selected manifest |
+| "Was anything lost?" / suspicion after restore | `check` |
+| Snapshot looks too large, or "which sessions were active after <time>?" | Follow [time-window selection](references/session_liveness.md#select-recovery-candidates-by-a-time-window) before choosing a restore set |
+| One specific session to bring back | `restore --only <id-prefix>` |
+| Minions `native_runtime` session or managed account-adoption error | Follow [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
+| Unmanaged/legacy Codex quota running out; manually switching account, keeping all Codex work | Start with [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first) |
+| After a switch, want the same sessions back ("换号后恢复原会话"); opening blocked or delegated | Follow [the original-set recovery route](references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session) |
+
+## Codex account switch
+
+Start with [account-owner selection](references/codex-account-switch.md#choose-the-account-owner-first).
+For the selected independent-TUI workflow, follow
+[save before switching](references/codex-account-switch.md#save-before-switching)
+and [restore or resume the batch](references/codex-account-switch.md#restore-and-resume-an-interrupted-batch).
+For blocked or delegated reopening, follow
+[the original-set route](references/codex-account-switch.md#reopen-the-original-recorded-set-not-a-blank-session).
+Keep command examples, handoff, authorization and acceptance in that SOP.
+Implementation: [ghostty_switch.py](scripts/ghostty_switch.py).
+
+## Quick start
+
+Before reopening sessions, follow
+[current-set reconciliation](references/restore_mechanics.md#reconcile-the-current-wanted-set).
+Keep the same explicit manifest and selection through preview, restore and check.
+
+```bash
+# Before quitting (from any directory):
+python3 <skill-dir>/scripts/ghostty_session.py snapshot
+
+# After selecting the wanted set, preview it before any foreground input:
+python3 <skill-dir>/scripts/ghostty_session.py restore --snapshot <manifest.json> --all --dry-run
+# Carry the selected --only/--exclude options into this preview, then omit --dry-run to execute.
+```
+
+Without `--all`, manual manifests select active sessions only; automatic manifests
+select their recorded set. Use `--all` to include waiting/quota/dead/stale/unknown rows.
+
+The snapshot lands in `~/.ghostty-session/snapshots/` (home-relative, survives reboot).
+Manual snapshots record Ghostty process descendants only. They persist resumable
+AI `sessions`, `unresolved` TUIs, `other_terminals` with cwd/process evidence, and
+the observed `terminal_inventory`. Other terminal emulators are excluded.
+Treat a TTY as a terminal surface, not a tab: splits and window membership are
+unknown. If the user supplies a tab count, record it with `snapshot --expected-tabs <N>`;
+do not use matching session/TTY totals as proof of current-window coverage.
+State the unmapped window/tab boundary before the update. An empty observation
+refuses to replace the previous backup. Non-AI commands and unresolved argv are
+evidence, not instructions to execute automatically.
+`restore` skips already-live IDs by default. It finishes with a bounded auto-check
+that prints `N/M present`, a manual reopen command and a retry command containing only
+missing IDs. Read that result before declaring success; per-tab `SENT (unverified)`
+is a paste acknowledgement, not proof that a session reopened. Re-running the same
+manifest opens only the IDs still missing. `--dry-run` prints commands without GUI actions.
+Repeat current-set reconciliation after a manual handoff or any change in selection.
+After process reconciliation, follow [history-readiness acceptance](references/restore_mechanics.md#verify-history-readiness-after-process-reconciliation)
+before claiming that the selected conversations are ready to read.
+
+## Automatic change-only backups
+
+Read [automatic-snapshots.md](references/automatic-snapshots.md) before installing
+or operating `scripts/ghostty_watch.py`, including an upgrade of its installed
+script copies. That SOP owns schedule/enable-state preservation, partial coverage,
+change-only writes and native-round verification.
+
+## No suitable snapshot: reconstruct the recovery manifest
+
+For Codex identity and indexed recovery, use the maintained
+`daymade-claude-code:read-codex-history` dependency. Resolve that Skill's directory
+from the current host; install its `daymade-claude-code` plugin through the host's
+ordinary marketplace flow when authorized and absent. The script discovers a source
+checkout or a separately installed sibling `read-codex-history`; other layouts use
+`--history-reader <reader-skill-dir>` or `GHOSTTY_CODEX_HISTORY_READER`. Missing reader
+or state index fails explicitly; do not replace it with a rollout corpus scan.
+
+```bash
+# Review candidates without writing state or opening tabs:
+python3 <skill-dir>/scripts/ghostty_session.py reconstruct \
+  --history-reader <reader-skill-dir> --dry-run
+
+# Build one chosen set in a NEW file; --only accepts unambiguous ID prefixes:
+python3 <skill-dir>/scripts/ghostty_session.py reconstruct \
+  --history-reader <reader-skill-dir> --since <YYYY-MM-DD> \
+  --only <id-prefix-1> <id-prefix-2> --out <recovery-manifest.json>
+
+# Restore the full selected set in one invocation, including waiting/quota rows:
+python3 <skill-dir>/scripts/ghostty_session.py restore \
+  --snapshot <recovery-manifest.json> --all
+```
+
+Reconstruction merges the optional `--snapshot` (otherwise latest, if present) with
+bounded recent indexed Codex candidates. `--only` filters this merged result, so the
+output manifest contains exactly the requested rows even when a latest snapshot exists.
+It verifies internal rollout identity using
+the owning reader and marks each row `past-snapshot` or `indexed-terminal-candidate`.
+Terminal evidence is `source=cli` or `originator=codex-tui`; actual TUIs can report
+`source=vscode`. `--terminal-source` and `--terminal-originator` customize those
+accepted metadata values. Subagents are excluded by the owning inventory's metadata,
+not by underscores in filenames. `--codex-home` selects a nondefault Codex store.
+
+Past membership proves only that a session appeared in that snapshot. Indexed
+terminal candidates prove terminal origin, not that the tab was live at shutdown.
+Review timestamps/titles and select the intended set before restore. `--limit` is a
+hard cap on indexed candidates inspected; widen discovery bounds only when needed.
+No snapshot means Claude membership remains unknown;
+reconstruction does not discover Claude sessions. Preserve explicit Claude records
+from a known snapshot rather than claiming an exhaustive recovery.
+
+The new manifest never changes `snapshots/latest.json` and refuses to overwrite an
+existing output. Exit 0 means the selected evidence was verified; exit 1 means the
+manifest lists rejected candidates requiring attention; exit 2 means invalid input
+or unavailable evidence. Dry-run output is JSON for inspection.
+
+## What manual snapshot records per session
+
+- **Anchor**: the session UUID from a recognized resume/session selector (never
+  match on process names — argv[0] flips between bare `claude` and
+  `/usr/local/bin/claude`). Option values and prompt text cannot establish identity.
+  A fork selector names the parent; resolve the child's own ID from verified
+  transcript evidence, then resume that child without replaying `fork` or
+  `--fork-session`. Fresh TUIs likewise use transcript storage:
+  the session file born at or after the process started, in the project bucket
+  of the same cwd, internal identity verified. When several
+  fresh TUIs share one bucket, transcripts are assigned disjointly — one file
+  per TUI; an undecidable race (equidistant claims) refuses to the unresolved
+  section rather than guessing. Live TUIs matching neither way are persisted as
+  unresolved rows and printed in the snapshot report — visible, never silently dropped.
+- **Liveness**: last timestamp read from the *content* of the session file — not
+  its mtime, which can change without real interaction. Use the time-window recipe
+  above to qualify actual work rather than treating every record as interaction.
+- **Channel health**: `dead-channel` when a Claude transcript's tail carries a
+  structured `isApiErrorMessage` with "Login expired" — restoring such a tab reopens
+  history but the session stops at `/login`; the snapshot marks it so you can skip it.
+  Prose inside a conversation that merely *discusses* an error never counts.
+- **Profile**: parsed from `--settings .../settings/<name>.json` when present, else
+  `direct`.
+
+## Restore mechanics and limits
+
+- Reopen = activate Ghostty → Cmd+T → clipboard-paste the reopen command → Return, one
+  tab per missing session, followed by mandatory auto-reconciliation. Keystroke paste is
+  timing-sensitive: an interruption between Cmd+T and the paste leaves an empty tab
+  whose command was silently lost. The auto-check exists to make
+  that visible; never skip it, and never declare success from paste return codes alone.
+- Before any paste, tell the user to leave keyboard and mouse untouched through
+  reconciliation. The script repeats this notice before its first GUI action.
+- Settle user-controlled external preconditions before the first paste. An in-flight
+  ChatGPT account switch is the common one: a reopened tab binds to whichever account
+  is logged in when `codex resume` launches, so opening before the switch finishes
+  means closing and restoring those tabs again. If switching accounts is the goal,
+  use [the switch SOP](references/codex-account-switch.md) instead.
+- Requires **Accessibility permission** for `osascript` keystrokes (System Events).
+  If the current host denies Ghostty UI automation, do not switch channels to
+  bypass it: prepare the selected manifest and exact user-run restore command,
+  then reconcile after permitted execution. Reboot recovery uses read-only
+  `check --snapshot <manifest> --strict`; account switching uses
+  [the mode-bound switch check](references/codex-account-switch.md#restore-and-resume-an-interrupted-batch).
+- The batch restore does not reconstruct original window grouping or splits; it
+  opens missing sessions as tabs in the active window. Captured grouping remains
+  unknown. Do not infer a platform-wide AX limitation from this script boundary;
+  use the [current native observations](references/restore_mechanics.md#current-native-observation-boundary).
+- Rollout files that codex itself cannot find anymore print `no-artifact`; restoring
+  them replays the same `codex resume <id>` and stays a best effort.
+
+## Profile environment mapping (optional)
+
+If your Claude profiles inject config via environment (e.g. `CLAUDE_CONFIG_DIR`), record
+prefixes in `~/.ghostty-session/profile-env.json` so restored tabs boot the same profile
+context:
+
+```json
+{"research": "CLAUDE_CONFIG_DIR=~/.claude-profiles/research", "family": "HTTP_PROXY=http://127.0.0.1:7890"}
+```
+
+Without it, restores replay captured settings, profile and permission/model flags;
+process environment beyond argv remains unknown. The mapping is
+user-local data outside the skill bundle; no default mapping ships.
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| `restore` reports `NOT OBSERVED` | reconcile the current wanted set first; retry only still-wanted IDs, excluding intentional closures |
+| `no-artifact` on a Codex session | the verified indexed session has no usable rollout; resume remains best-effort |
+| `unknown` Codex liveness | reader/index unavailable or identity ambiguous; resolve the dependency/store instead of choosing the first filename match |
+| `dead-channel` sessions restored anyway | expected: history reopens, session stops at `/login`; re-auth or switch provider |
+| `check` says present but tab looks empty | another live process already claimed that session id (e.g. resumed in another tab) |
+| osascript refuses keystrokes | grant Accessibility (System Events) permission; verify with `osascript -e 'tell application "System Events" to get UI elements enabled'` |
+| a brand-new tab is missing from the session list | a fresh TUI has no argv UUID and its transcript file appears with its first message; until then it shows under unresolved live TUIs. A late first message can fall outside the upper window defined by `FIRST_WRITE_WINDOW_SECONDS` and the candidate filters in [the resolver](scripts/ghostty_session.py) |
+
+## One-shot helper terminals and original sessions
+
+Some delegated batch runners end by returning an interactive shell in their own
+terminal; their lifecycle is distinct from the original sessions this skill
+snapshots and restores. Keep the following evidence boundaries:
+
+- A one-shot helper terminal that shows `Process exited` proves only that its
+  foreground process ended. It does not identify which run it was, why it ended,
+  or what business result followed — read the run's own saved receipt (its
+  summary and stderr files) instead of the emulator's exit message.
+- `Last login` prints the previous login record when a shell starts; it is not an
+  identifier of the current TTY's session, and matching its timestamp does not
+  attribute the tab.
+- Split historical evidence from current binding; neither proves the other.
+  Historical attribution of a tab whose foreground process has already exited
+  rests on time-bound recorded evidence: a recorded PID with its recorded start
+  time, the recorded session/SID, and the recorded terminal-device binding,
+  each captured while the process ran. Historical attribution does not require
+  that original process to remain alive; state the window and sources the
+  recorded evidence covers without inferring descendant exit or cleanup.
+- Before acting on a live session, re-observe its PID/start time, session/SID,
+  terminal device and exact current surface. For an exited owned helper, match
+  the host's existing current surface identity to its recorded launch evidence
+  and check for continuing or replacement work on that surface; do not demand a
+  live process from an exited terminal. If the host cannot establish the needed
+  binding, retain unknown and leave that action unperformed. Existing task
+  authorization and host permissions still apply. A reused TTY number, title
+  or matching wall-clock time does not establish this binding.
+- A host denial of Ghostty UI automation continues to bind. Do not close,
+  relaunch or "repair" an old tab by inference, and never signal a process you
+  cannot bind to a run this way.
+- A locally installed one-shot controller integration (for example, a
+  local-agents terminal entry) may already return an interactive shell after its
+  batch; resolve it through its own installed entry. This skill neither requires
+  nor configures it, and this skill's restore route never substitutes for it.
+
+## Deeper details
+
+- [references/session_liveness.md](references/session_liveness.md) — Read before
+  filtering recovery by activity, investigating a liveness result, or adapting to a
+  changed transcript layout.
+- [references/restore_mechanics.md](references/restore_mechanics.md) — Read before
+  restoring sessions, investigating a restore result, or modifying the restore path.

@@ -1,7 +1,0 @@
-{
-    "name": "Redis Info",
-    "description": "Redis info string parser for NodeJS",
-    "twitter": [
-        "fgribreau"
-    ]
-}

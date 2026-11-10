@@ -1,4 +1,0 @@
-# audios generados (se regeneran con voz.py / benchmark.py)
-*.mp3
-*.wav
-muestras*/

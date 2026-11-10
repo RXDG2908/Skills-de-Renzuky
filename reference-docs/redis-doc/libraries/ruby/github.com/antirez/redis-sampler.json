@@ -1,7 +1,0 @@
-{
-    "name": "Redis-sampler",
-    "description": "Sample a Redis DB to understand dataset composition.",
-    "twitter": [
-        "antirez"
-    ]
-}

@@ -1,7 +1,0 @@
-{
-    "name": "HighcoTimelineBundle",
-    "description": "TimelineBundle is a Bundle which works with Symfony 2.* which provides a timeline for a subject as Facebook can do.",
-    "twitter": [
-        "stephpy"
-    ]
-}

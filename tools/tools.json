@@ -1,0 +1,57 @@
+{
+  "_about": "Tools used by the skills. The repo only holds links; run tools/install.ps1 (Windows) or tools/install.sh to fetch them into tools/_downloads/ (gitignored). kind: git = cloned; pip/npm/winget = installed globally; manual = open the url and follow it; npx = nothing to install, runs on demand.",
+  "tools": [
+    {"name": "ffmpeg", "category": "base", "kind": "winget", "id": "Gyan.FFmpeg", "url": "https://ffmpeg.org/download.html", "license": "LGPL/GPL", "used_by": ["video-*", "cut-as-code", "ffmpeg-skill", "claude-video", "talking-head-rough-cut"]},
+    {"name": "yt-dlp", "category": "base", "kind": "winget", "id": "yt-dlp.yt-dlp", "url": "https://github.com/yt-dlp/yt-dlp", "license": "Unlicense", "used_by": ["ykdojo-yt-dlp", "claude-video", "daymade-claude-code-skills"]},
+    {"name": "node", "category": "base", "kind": "winget", "id": "OpenJS.NodeJS.LTS", "url": "https://nodejs.org", "license": "MIT", "used_by": ["remotion-*", "hyperframes-official", "loom", "packbox"]},
+    {"name": "python", "category": "base", "kind": "winget", "id": "Python.Python.3.12", "url": "https://www.python.org", "license": "PSF", "used_by": ["most scripts"]},
+    {"name": "openai-whisper", "category": "base", "kind": "pip", "id": "openai-whisper", "url": "https://github.com/openai/whisper", "license": "MIT", "used_by": ["video-editing-ffmpeg-whisper", "video-motion-craft", "lyric-swap-lipsync"]},
+    {"name": "whisper.cpp", "category": "base", "kind": "git", "url": "https://github.com/ggml-org/whisper.cpp", "license": "MIT", "used_by": ["talking-head-rough-cut"]},
+    {"name": "markitdown", "category": "base", "kind": "pip", "id": "markitdown[all]", "url": "https://github.com/microsoft/markitdown", "license": "MIT", "used_by": ["markitdown"]},
+    {"name": "edge-tts", "category": "voz", "kind": "pip", "id": "edge-tts", "url": "https://github.com/rany2/edge-tts", "license": "LGPL-3.0", "used_by": ["tts-voice-bank"]},
+    {"name": "kokoro", "category": "voz", "kind": "pip", "id": "kokoro", "url": "https://github.com/hexgrad/kokoro", "license": "Apache-2.0", "used_by": ["tts-voice-bank"]},
+    {"name": "piper-tts", "category": "voz", "kind": "pip", "id": "piper-tts", "url": "https://github.com/OHF-Voice/piper1-gpl", "license": "GPL-3.0", "used_by": ["tts-voice-bank"]},
+    {"name": "espeak-ng", "category": "voz", "kind": "winget", "id": "eSpeak-NG.eSpeak-NG", "url": "https://github.com/espeak-ng/espeak-ng", "license": "GPL-3.0", "used_by": ["tts-voice-bank"]},
+
+    {"name": "remotion", "category": "video", "kind": "npx", "id": "create-video@latest", "url": "https://www.remotion.dev", "license": "Remotion License (free for individuals/small teams)", "used_by": ["remotion-skills-official", "claude-remotion-skill"]},
+    {"name": "hyperframes", "category": "video", "kind": "npx", "id": "hyperframes", "url": "https://github.com/heygen-com/hyperframes", "license": "Apache-2.0", "used_by": ["hyperframes-official", "brag", "vertical-video-editing-skills"]},
+    {"name": "openmontage", "category": "video", "kind": "git", "url": "https://github.com/calesthio/OpenMontage", "license": "AGPL-3.0", "used_by": ["OpenMontage"]},
+    {"name": "ffmpeg-skill-mcp", "category": "video", "kind": "git", "url": "https://github.com/kajisho5/ffmpeg-skill", "license": "MIT", "used_by": ["ffmpeg-skill"]},
+
+    {"name": "latentsync", "category": "lipsync", "kind": "git", "url": "https://github.com/bytedance/LatentSync", "license": "Apache-2.0", "note": "Best open lip-sync quality for existing footage (v1.6). Needs NVIDIA GPU ~18GB for 512px.", "used_by": ["lyric-swap-lipsync"]},
+    {"name": "musetalk", "category": "lipsync", "kind": "git", "url": "https://github.com/TMElyralab/MuseTalk", "license": "MIT", "note": "Fast / real-time lip-sync, lighter GPU.", "used_by": ["lyric-swap-lipsync"]},
+    {"name": "wav2lip", "category": "lipsync", "kind": "git", "url": "https://github.com/Rudrabha/Wav2Lip", "license": "non-commercial", "note": "Old but very robust sync; blurry mouth on HD.", "used_by": ["lyric-swap-lipsync"]},
+
+    {"name": "uvr", "category": "separacion", "kind": "manual", "url": "https://github.com/Anjok07/ultimatevocalremovergui/releases", "license": "MIT", "note": "Windows installer. Use MDX/Mel-Band Roformer models to split vocals vs instrumental.", "used_by": ["lyric-swap-lipsync"]},
+    {"name": "demucs", "category": "separacion", "kind": "pip", "id": "demucs", "url": "https://github.com/adefossez/demucs", "license": "MIT", "note": "CLI stem splitter: demucs --two-stems=vocals song.mp3", "used_by": ["lyric-swap-lipsync"]},
+
+    {"name": "viitorvoice-nar", "category": "edicion-habla", "kind": "git", "url": "https://github.com/viitor-ai/viitor-voice-nar", "license": "Apache-2.0 (check submodels)", "note": "Word-level speech editing: give audio + original text + edited text, it re-synthesizes only the changed words in the same voice. Weights: huggingface.co/ZzWater/ViiTorVoice-NAR", "used_by": ["lyric-swap-lipsync"]},
+    {"name": "auk", "category": "edicion-habla", "kind": "git", "url": "https://github.com/Tencent-Hunyuan/AuK", "license": "MIT (verify)", "note": "Tencent 1.5B speech generation + editing (replace/insert/delete words).", "used_by": ["lyric-swap-lipsync"]},
+    {"name": "fish-speech", "category": "edicion-habla", "kind": "git", "url": "https://github.com/fishaudio/fish-speech", "license": "see repo (weights non-commercial)", "note": "SOTA voice-clone TTS; newer releases support replacing a single word.", "used_by": ["lyric-swap-lipsync", "tts-voice-bank"]},
+
+    {"name": "soulx-singer", "category": "canto", "kind": "git", "url": "https://github.com/Soul-AILab/SoulX-Singer", "license": "Apache-2.0", "note": "Zero-shot singing synthesis + singing voice editing: change lyrics keeping prosody. Has a MIDI editor to fix alignment. Weights on HF Soul-AILab/SoulX-Singer.", "used_by": ["lyric-swap-lipsync"]},
+    {"name": "yingmusic-singer", "category": "canto", "kind": "git", "url": "https://github.com/ASLP-lab/YingMusic-Singer", "license": "CC BY 4.0 (verify)", "note": "Melody-preserving lyric editing of a sung vocal, no manual alignment.", "used_by": ["lyric-swap-lipsync"]},
+    {"name": "ace-step", "category": "canto", "kind": "git", "url": "https://github.com/ace-step/ACE-Step-1.5", "license": "Apache-2.0", "note": "Music model: 'edit' (only_lyrics) and 'repaint' a time range with new sung lyrics. Works on the full mix.", "used_by": ["lyric-swap-lipsync"]},
+    {"name": "seed-vc", "category": "canto", "kind": "git", "url": "https://github.com/Plachtaa/seed-vc", "license": "GPL-3.0", "note": "Zero-shot voice conversion incl. singing (f0 condition, 1-30 s reference, no training).", "used_by": ["lyric-swap-lipsync"]},
+    {"name": "applio", "category": "canto", "kind": "git", "url": "https://github.com/IAHispano/Applio", "license": "MIT", "note": "RVC voice conversion with a friendly UI (train a voice model, convert a guide vocal).", "used_by": ["lyric-swap-lipsync"]},
+    {"name": "rvc-webui", "category": "canto", "kind": "git", "url": "https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI", "license": "MIT", "note": "Original RVC.", "used_by": ["lyric-swap-lipsync"]},
+
+    {"name": "blender", "category": "3d-fab", "kind": "winget", "id": "BlenderFoundation.Blender", "url": "https://www.blender.org", "license": "GPL", "used_by": ["export-paper-model", "scenario-skills"]},
+    {"name": "openscad", "category": "3d-fab", "kind": "winget", "id": "OpenSCAD.OpenSCAD", "url": "https://openscad.org", "license": "GPL-2.0", "used_by": ["openscad-skills"]},
+    {"name": "cadquery", "category": "3d-fab", "kind": "pip", "id": "cadquery", "url": "https://github.com/CadQuery/cadquery", "license": "Apache-2.0", "used_by": ["cadquery-skills"]},
+    {"name": "boxes", "category": "3d-fab", "kind": "git", "url": "https://github.com/florianfesti/boxes", "license": "GPL-3.0", "note": "Boxes.py: 100+ parametric laser-cut box generators -> SVG. Also: pip install boxes", "used_by": []},
+    {"name": "export-paper-model", "category": "3d-fab", "kind": "git", "url": "https://github.com/addam/Export-Paper-Model-from-Blender", "license": "GPL-3.0+", "note": "Blender add-on: mesh -> printable papercraft net (SVG/PDF). Install the folder as an add-on, Blender >= 5.0.", "used_by": []},
+    {"name": "packbox", "category": "3d-fab", "kind": "git", "url": "https://github.com/sbarrak/packbox", "license": "MIT", "note": "PackBox Studio: packaging dielines + artwork + 3D fold preview. npm install && npm start.", "used_by": []},
+    {"name": "packaging-dieline-generator", "category": "3d-fab", "kind": "git", "url": "https://github.com/NealZhouPanda/packaging-dieline-generator", "license": "MIT", "note": "Offline box dieline generator -> 1:1 mm SVG/PDF (single HTML in release/).", "used_by": []},
+    {"name": "materialize", "category": "texturas", "kind": "manual", "url": "https://github.com/BoundingBoxSoftware/Materialize/releases", "license": "GPL-3.0", "note": "Photo -> PBR maps. Download the Windows build from Releases.", "used_by": []},
+
+    {"name": "agent-reach", "category": "tool+skill", "kind": "git", "url": "https://github.com/Panniantong/Agent-Reach", "license": "see repo", "used_by": ["Agent-Reach"]},
+    {"name": "voicestudio", "category": "tool+skill", "kind": "git", "url": "https://github.com/debpalash/VoiceStudio", "license": "see repo", "used_by": ["VoiceStudio"]},
+    {"name": "puppetloom", "category": "tool+skill", "kind": "git", "url": "https://github.com/CheshireMew/PuppetLoom", "license": "see repo", "used_by": ["PuppetLoom"]},
+    {"name": "motionloom", "category": "tool+skill", "kind": "git", "url": "https://github.com/lenhonbp/MotionLoom", "license": "see repo", "used_by": ["MotionLoom"]},
+    {"name": "archify", "category": "tool+skill", "kind": "git", "url": "https://github.com/tt-a1i/archify", "license": "see repo", "used_by": ["archify"]},
+    {"name": "rondoflow", "category": "tool+skill", "kind": "git", "url": "https://github.com/rondoflow/rondoflow", "license": "MIT", "used_by": ["rondoflow"]},
+    {"name": "scenario-mcp", "category": "tool+skill", "kind": "manual", "url": "https://github.com/scenario-labs/skills", "license": "MIT (paid Scenario account for generation)", "used_by": ["scenario-skills"]},
+    {"name": "ae-cli", "category": "tool+skill", "kind": "manual", "url": "skills/ae-agent-skills/UPSTREAM-README.md", "license": "see repo", "note": "Needs Adobe After Effects + ae-cli; install steps in the upstream README.", "used_by": ["ae-agent-skills"]}
+  ]
+}

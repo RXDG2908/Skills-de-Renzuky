@@ -1,8 +1,0 @@
-{
-    "name": "neural-redis",
-    "license": "BSD",
-    "description": "Online trainable neural networks as Redis data types.",
-    "github": [
-        "antirez"
-    ]
-}

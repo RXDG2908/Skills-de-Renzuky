@@ -1,5 +1,0 @@
-{
-  "features": [
-    ["minecraft:ore_diamond", "dependency:surface_vegetation"]
-  ]
-}

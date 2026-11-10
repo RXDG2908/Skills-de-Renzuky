@@ -1,7 +1,0 @@
-{
-    "name": "Redis-sync",
-    "description": "A node.js Redis replication toolkit",
-    "twitter": [
-        "pconstr"
-    ]
-}

@@ -1,4 +1,0 @@
-{
-    "name": "miniredis",
-    "description": "Pure Go Redis server for Go unittests"
-}

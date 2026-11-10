@@ -1,7 +1,0 @@
-{
-    "name": "flask-redisboard",
-    "description": "A flask extension to support user view and manage redis with beautiful interface.",
-    "twitter": [
-        "hjlarry"
-    ]
-}

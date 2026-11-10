@@ -1,2 +1,102 @@
+# ── Skills library: only rules/skills (md, code, configs) go in git ──
+# Heavy binaries stay on your PC. Tools are fetched by tools/install.ps1 / install.sh.
+
+# OS junk
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Tools downloaded locally (the repo only keeps links in tools/tools.json)
+tools/_downloads/
+
+# Images
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.bmp
+*.tif
+*.tiff
+*.tga
+*.exr
+*.hdr
+*.ico
+*.psd
+*.kra
+*.avif
+*.heic
+
+# Video
+*.mp4
+*.mov
+*.webm
+*.mkv
+*.avi
+*.m4v
+*.flv
+
+# Audio
+*.mp3
+*.wav
+*.ogg
+*.flac
+*.m4a
+*.aac
+*.opus
+*.mid
+*.midi
+
+# Fonts
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.eot
+
+# 3D / project files
+*.blend
+*.blend1
+*.fbx
+*.glb
+*.obj
+*.stl
+*.3mf
+*.unitypackage
+
+# Documents / archives / binaries
+*.pdf
+*.odp
+*.zip
+*.7z
+*.rar
+*.tar
+*.gz
+*.exe
+*.dll
+*.so
+*.dylib
+
+# ML models / weights
+*.task
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.npy
+*.npz
+*.gguf
+
+# Build output / deps / renders
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+out/
+output/
+outputs/
+renders/
+dist/
