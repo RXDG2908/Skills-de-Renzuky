@@ -80,6 +80,9 @@ Códigos de voz útiles (wiki de oscie57):
 - **Cantadas:** `en_female_f08_salut_damour`, `en_male_m03_lobby`, `en_male_m03_sunshine_soon`, `en_female_f08_warmy_breeze`, `en_male_sing_funny_it_goes_up`, `en_male_m2_xhxs_m03_silly` (chipmunk)
 
 Lista completa: <https://github.com/oscie57/tiktok-voice/wiki/Voice-Codes>.
+
+Las voces **cantadas** también cantan en español, sobre su propia melodía fija: el texto
+se ajusta a esa melodía. Muestras en `muestras-tiktok-cantadas/` (8 voces × 3 letras).
 Ojo: los personajes de Disney/Star Wars son marcas registradas, úsalos solo para memes personales.
 
 > Alternativa sin depender de TikTok: el preset `tiktok` de `voz.py`, o en el propio
@@ -130,6 +133,34 @@ Precios y límites cambian; esto es lo que decían las reseñas en 2025–26.
 
 Microsoft Sam (la voz meme de Windows XP) **no** es el SAM del Commodore, aunque muchas
 webs las mezclan.
+
+---
+
+## 6. Benchmark de tiempos (`benchmark.py`)
+
+```bash
+python benchmark.py --runs 3
+```
+
+```bash
+python benchmark.py --only edge sapi
+```
+
+Mide la latencia (mediana y mínimo), la duración del audio, el RTF (latencia ÷ audio) y los
+caracteres por segundo con textos de 39, 249 y 999 caracteres. Escribe
+[`benchmark/resultados.md`](benchmark/resultados.md) y `.csv`.
+
+Resultados del 2026-11-10 (esta PC, 3 corridas):
+
+| Motor | Corto (39 c) | Medio (249 c) | Largo (999 c, ~70 s de audio) | Nota |
+|---|---|---|---|---|
+| **SAPI Helena** (Windows, local) | 0.37 s | 0.43 s | 0.75 s | El más rápido, pero suena robótico |
+| **edge-tts** (Jorge/Camila/Álvaro) | ~1.2 s | ~1.4 s | ~1.9–2.7 s | Casi fijo: ~1 s de conexión + generación muy rápida |
+| **edge + efecto** (loquendo/robot/ardilla) | ~1.2 s | ~1.5 s | ~2.0–2.5 s | ffmpeg suma ~0.1–0.5 s |
+| **TikTok** (es_mx_002, en_us_001, ghostface) | ~2.5 s | ~4–5.5 s | ~17–23 s | Corta en trozos de 280 caracteres y los pide uno por uno: lo más lento |
+
+Todos los motores generan más rápido que tiempo real (RTF < 1). Para guiones largos usa
+edge-tts; para TikTok, conviene pedir los fragmentos en paralelo o usar textos cortos.
 
 ---
 

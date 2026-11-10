@@ -29,8 +29,8 @@ PRESETS = {
     "grave":       ("es-ES-AlvaroNeural",    "-10%", "-20Hz", None),   # trailer / epico
     "loquendo":    ("es-ES-AlvaroNeural",    "+5%",  "-8Hz",  "aresample=11025,aresample=44100,acrusher=bits=10:mode=log:aa=1"),  # sabor sintetico retro (aprox., no es Loquendo real)
     "robot":       ("es-MX-JorgeNeural",     "+0%",  "+0Hz",  "afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)':win_size=512:overlap=0.75"),
-    "ardilla":     ("es-MX-DaliaNeural",     "+10%", "+50Hz", "asetrate=44100*1.35,aresample=44100,atempo=0.9"),
-    "demonio":     ("es-ES-AlvaroNeural",    "-15%", "-30Hz", "asetrate=44100*0.75,aresample=44100,atempo=1.2,aecho=0.8:0.8:40:0.4"),
+    "ardilla":     ("es-MX-DaliaNeural",     "+10%", "+50Hz", "asetrate=24000*1.35,aresample=24000,atempo=0.9"),
+    "demonio":     ("es-ES-AlvaroNeural",    "-15%", "-30Hz", "asetrate=24000*0.75,aresample=24000,atempo=1.2,aecho=0.8:0.8:40:0.4"),
     "radio":       ("es-MX-JorgeNeural",     "+0%",  "+0Hz",  "highpass=f=400,lowpass=f=3200,acompressor"),
     "eco":         ("es-MX-JorgeNeural",     "+0%",  "+0Hz",  "aecho=0.8:0.85:300|600:0.4|0.25"),
     "english":     ("en-US-GuyNeural",       "+0%",  "+0Hz",  None),
