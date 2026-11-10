@@ -104,6 +104,7 @@ Clonado de voz, dubbing, transcripción, TTS, generación de audio.
 
 | Carpeta / skill | Tipo | Qué | Nº |
 |---|---|---|---|
+| [`tts-voice-bank/`](tts-voice-bank/) | Tool | Banco de voces TTS rápidas: `voz.py` (edge-tts, 19 presets: narrador YouTube, tiktok, loquendo, robot, ardilla, acentos) + guía TikTok TTS / Loquendo / Zueira / webs gratis / Piper-Kokoro offline | 1 |
 | [`VoiceStudio/`](VoiceStudio/) | Tool+Skill | App local tipo ElevenLabs: clonar voz, dubbing, transcripción — necesita VoiceStudio corriendo | 2 |
 | [`ecc-affaan-skills/skills/fal-ai-media`](ecc-affaan-skills/skills/fal-ai-media) | Skill | Gen. de imagen/vídeo/**audio** (TTS CSM-1B, video→audio ThinkSound) vía fal.ai MCP | — |
 | `jianshuo-claude-skills/` dubbing/transcribing/voicedrop | Tool+Skill | [`wjs-dubbing-video`](jianshuo-claude-skills/wjs-dubbing-video), [`wjs-transcribing-audio`](jianshuo-claude-skills/wjs-transcribing-audio), [`wjs-translating-subtitles`](jianshuo-claude-skills/wjs-translating-subtitles), [`wjs-voicedrop`](jianshuo-claude-skills/wjs-voicedrop) (necesita MCP voicedrop.cn) | — |
